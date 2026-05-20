@@ -1,0 +1,52 @@
+:root {
+    --sidebar-dark: #12192c;
+    --primary-blue: #1e73be;
+    --primary-red: #c62828;
+    --glass-bg: rgba(255, 255, 255, 0.1);
+    --gradient-bg: linear-gradient(135deg, #2c3e50 0%, #000000 100%);
+}
+
+.bg-dashboard {
+    background: var(--gradient-bg);
+    min-height: 100vh;
+    color: white;
+}
+
+.sidebar {
+    width: 260px;
+    background: var(--sidebar-dark);
+    height: 100vh;
+    position: fixed;
+    left: 0;
+    top: 0;
+    padding: 20px;
+}
+
+.main-content {
+    margin-left: 260px;
+    padding: 30px;
+}
+
+.card {
+    background: rgba(255, 255, 255, 0.9); /* White cards like your image */
+    border-radius: 15px;
+    padding: 25px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    color: #333;
+}
+
+.student-bg { border-top: 5px solid var(--primary-blue); }
+.guidance-bg { border-top: 5px solid var(--primary-red); }
+
+/* Matches your buttons exactly */
+.action-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: 25px;
+    border: none;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    background: var(--primary-blue);
+    margin-top: 15px;
+}
