@@ -17,6 +17,31 @@
                 <span class="safe-text">SAFE</span><span class="speak-text">SPEAK</span>
             </span>
         </div>
+
+        {{-- Stats inside nav --}}
+        <div class="nav-stats">
+            <div class="nav-stat-item total">
+                <i class="fas fa-file-alt"></i>
+                <span class="nav-stat-number">{{ $stats['total'] }}</span>
+                <span class="nav-stat-label">Total</span>
+            </div>
+            <div class="nav-stat-item pending">
+                <i class="fas fa-clock"></i>
+                <span class="nav-stat-number">{{ $stats['pending'] }}</span>
+                <span class="nav-stat-label">Pending</span>
+            </div>
+            <div class="nav-stat-item in-progress">
+                <i class="fas fa-spinner"></i>
+                <span class="nav-stat-number">{{ $stats['in_progress'] }}</span>
+                <span class="nav-stat-label">In Progress</span>
+            </div>
+            <div class="nav-stat-item resolved">
+                <i class="fas fa-check-circle"></i>
+                <span class="nav-stat-number">{{ $stats['resolved'] }}</span>
+                <span class="nav-stat-label">Resolved</span>
+            </div>
+        </div>
+
         <div class="nav-user">
             <span>Hello, <span class="user-highlight">{{ auth()->user()->full_name }}</span>!</span>
             <i class="fas fa-cog settings-icon" onclick="openSettings()"></i>
@@ -26,38 +51,6 @@
             </form>
         </div>
     </nav>
-
-    {{-- Stats --}}
-    <div class="stats-row">
-        <div class="stat-card total">
-            <div class="stat-icon"><i class="fas fa-file-alt"></i></div>
-            <div class="stat-info">
-                <span class="stat-number">{{ $stats['total'] }}</span>
-                <span class="stat-label">Total Reports</span>
-            </div>
-        </div>
-        <div class="stat-card pending">
-            <div class="stat-icon"><i class="fas fa-clock"></i></div>
-            <div class="stat-info">
-                <span class="stat-number">{{ $stats['pending'] }}</span>
-                <span class="stat-label">Pending</span>
-            </div>
-        </div>
-        <div class="stat-card in-progress">
-            <div class="stat-icon"><i class="fas fa-spinner"></i></div>
-            <div class="stat-info">
-                <span class="stat-number">{{ $stats['in_progress'] }}</span>
-                <span class="stat-label">In Progress</span>
-            </div>
-        </div>
-        <div class="stat-card resolved">
-            <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
-            <div class="stat-info">
-                <span class="stat-number">{{ $stats['resolved'] }}</span>
-                <span class="stat-label">Resolved</span>
-            </div>
-        </div>
-    </div>
 
     <main class="dashboard-container">
 
@@ -154,21 +147,23 @@
                     </div>
                 @endif
 
-                <h1 class="page-title">Conversation: {{ $selectedReport->case_id }}</h1>
-
-                <div class="report-details-panel">
-                    <div class="detail-group">
-                        <div><strong>Date Submitted:</strong> {{ $selectedReport->created_at->format('F d, Y h:i A') }}</div>
-                        <div><strong>Incident Date:</strong> {{ \Carbon\Carbon::parse($selectedReport->occurred_at)->format('F d, Y') }}</div>
-                        <div>
-                            <strong>Current Status:</strong>
+                {{-- Merged compact conversation header --}}
+                <div class="conv-header">
+                    <div class="conv-header-left">
+                        <div class="conv-header-title">
+                            <span class="conv-case-id">{{ $selectedReport->case_id }}</span>
                             <span class="status-badge {{ $selectedReport->status }}">
                                 {{ ucfirst(str_replace('_', ' ', $selectedReport->status)) }}
                             </span>
                         </div>
+                        <div class="conv-header-meta">
+                            <span><i class="fas fa-calendar-plus"></i> {{ $selectedReport->created_at->format('M d, Y h:i A') }}</span>
+                            <span class="conv-meta-divider">·</span>
+                            <span><i class="fas fa-calendar-day"></i> Incident: {{ \Carbon\Carbon::parse($selectedReport->occurred_at)->format('M d, Y') }}</span>
+                        </div>
                     </div>
 
-                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                    <div class="conv-header-actions">
                         {{-- Status Update (inbox only) --}}
                         @if(!$selectedReport->is_archived)
                         <form action="{{ route('guidance.updateStatus', $selectedReport->report_id) }}"
@@ -212,7 +207,8 @@
                     </div>
 
                     @foreach($selectedReport->messages as $msg)
-                        <div class="chat-bubble {{ $msg->user_id == auth()->id() ? 'guidance-msg' : 'student-msg' }}">
+                        <div class="chat-bubble {{ $msg->user_id == auth()->id() ? 'guidance-msg' : 'student-msg' }}"
+                             data-sender="{{ $msg->user_id == auth()->id() ? 'You' : 'Student' }}">
                             <div class="bubble-text">
                                 {!! nl2br(e($msg->message_text)) !!}
                                 <small>{{ $msg->created_at->format('h:i A') }}</small>
