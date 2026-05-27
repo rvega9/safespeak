@@ -74,6 +74,21 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/profile',    [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile',  [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    
 });
 
 require __DIR__.'/auth.php';
+
+Route::get('/setup-cloud-user', function () {
+// Check if user already exists to avoid duplicates
+if (!\App\Models\User::where('email', 'admin@test.com')->exists()) {
+\App\Models\User::create([
+'name' => 'Admin User',
+'email' => 'admin@test.com',
+'password' => bcrypt('password123'), // Set your password here
+]);
+return 'Cloud user created successfully! Try logging in now.';
+}
+return 'User already exists.';
+});
