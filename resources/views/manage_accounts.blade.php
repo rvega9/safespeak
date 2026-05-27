@@ -73,7 +73,7 @@
 
         <div class="manage-accounts-container">
 
-            {{-- ── Tabs ── --}}
+            {{-- Tabs --}}
             @php
                 $studentCount  = $users->where('role', 'student')->count();
                 $guidanceCount = $users->where('role', 'guidance')->count();
@@ -92,7 +92,7 @@
                 </button>
             </div>
 
-            {{-- ══ STUDENTS TAB ══ --}}
+            {{-- STUDENTS TAB --}}
             <div class="tab-panel active" id="tab-students">
                 <div class="tab-search">
                     <input type="text" id="searchStudents"
@@ -146,7 +146,7 @@
                 </div>
             </div>
 
-            {{-- ══ GUIDANCE TAB ══ --}}
+            {{-- GUIDANCE TAB --}}
             <div class="tab-panel" id="tab-guidance">
                 <div class="tab-search">
                     <input type="text" id="searchGuidance"
@@ -204,7 +204,7 @@
     </main>
 
     <script>
-        // ── Tab switching ──
+        // Tab switching 
         function switchTab(tabName, btn) {
             document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
             document.querySelectorAll('.account-tab').forEach(b => b.classList.remove('active'));
@@ -212,7 +212,7 @@
             btn.classList.add('active');
         }
 
-        // ── Live search filter ──
+        // Live search filter
         function filterTable(tableId, query) {
             const table    = document.getElementById(tableId);
             const rows     = table.querySelectorAll('tr.searchable-row');
@@ -233,7 +233,7 @@
             if (noResult) noResult.style.display = visible === 0 ? 'table-row' : 'none';
         }
 
-        // ── Hamburger ──
+        // Hamburger
         const toggle = document.getElementById('sidebarToggle');
         const navMenu = document.getElementById('navMenu');
         const sidebarFooter = document.getElementById('sidebarFooter');
@@ -246,7 +246,6 @@
             });
         }
 
-        // ── Auto-dismiss alerts ──
         setTimeout(() => {
             document.querySelectorAll('.auto-dismiss').forEach(el => {
                 el.style.transition = 'opacity 0.4s';

@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Response extends Model
 {
-    protected $table = 'messages'; // Matches your migration table name
+    protected $table = 'messages'; // Matches migration table name
     protected $primaryKey = 'message_id';
 
     protected $fillable = [

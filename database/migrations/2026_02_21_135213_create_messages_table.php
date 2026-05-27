@@ -9,13 +9,13 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('messages', function (Blueprint $table) {
-            $table->id('message_id'); // Primary Key from your ERD
+            $table->id('message_id');
             
             // Foreign Keys
-            // This links to the 'id' in your 'reports' table
+            // This links to the 'id' in 'reports' table
             $table->foreignId('report_id')->constrained('reports', 'report_id')->onDelete('cascade');
             
-            // This links to the 'id' in your 'users' table (the sender)
+            // This links to the 'id' in 'users' table (the sender)
             $table->foreignId('user_id')->constrained('users', 'id')->onDelete('cascade');
             
             $table->text('message_text');

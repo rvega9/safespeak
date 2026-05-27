@@ -87,7 +87,7 @@
             </div>
         @endif
 
-        {{-- ── Register Cards ── --}}
+        {{-- Register Cards --}}
         <section class="dashboard-grid">
 
             <div class="card student-bg">
@@ -100,7 +100,7 @@
                     </div>
                     <div class="input-group">
                         <label>Student ID (USN)</label>
-                        <input type="text" name="student_id" value="{{ old('student_id') }}" placeholder="e.g. 2024-00001" required>
+                        <input type="text" name="student_id" value="{{ old('student_id') }}" placeholder="e.g. 20240000110" required>
                     </div>
                     <div class="input-group">
                         <label>Department</label>
@@ -110,7 +110,7 @@
                         <label>Password</label>
                         <input type="password" name="student_password" placeholder="Min. 6 characters" required>
                     </div>
-                    {{-- invisible spacer so both buttons sit at the same level --}}
+                    
                     <div class="input-group card-spacer" aria-hidden="true"></div>
                     <button type="submit" class="action-btn">
                         <i class="fas fa-user-plus"></i> Register Student
@@ -128,7 +128,7 @@
                     </div>
                     <div class="input-group">
                         <label>Employee ID</label>
-                        <input type="text" name="employee_id" value="{{ old('employee_id') }}" placeholder="e.g. EMP-0001" required>
+                        <input type="text" name="employee_id" value="{{ old('employee_id') }}" placeholder="e.g. EMP0001" required>
                     </div>
                     <div class="input-group">
                         <label>Password</label>
@@ -145,7 +145,7 @@
 
         </section>
 
-        {{-- ── Overview tables ── --}}
+        {{-- Overview tables --}}
         <div class="manage-accounts-container">
             <div class="manage-accounts-title">
                 <i class="fas fa-users" style="color:#2b7cd3;"></i>

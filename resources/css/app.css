@@ -28,7 +28,7 @@
 }
 
 .card {
-    background: rgba(255, 255, 255, 0.9); /* White cards like your image */
+    background: rgba(255, 255, 255, 0.9); 
     border-radius: 15px;
     padding: 25px;
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
@@ -38,7 +38,7 @@
 .student-bg { border-top: 5px solid var(--primary-blue); }
 .guidance-bg { border-top: 5px solid var(--primary-red); }
 
-/* Matches your buttons exactly */
+
 .action-btn {
     width: 100%;
     padding: 12px;

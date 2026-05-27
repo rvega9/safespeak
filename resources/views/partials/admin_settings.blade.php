@@ -68,7 +68,7 @@
         </form>
     </div>
 
-    {{-- ── Tab: Password ── --}}
+    {{-- Tab: Password --}}
     <div class="settings-tab-content" id="admin-tab-password">
         <form action="{{ route('admin.updatePassword') }}" method="POST">
             @csrf
@@ -101,7 +101,7 @@
         </form>
     </div>
 
-    {{-- ── Tab: Account Info ── --}}
+    {{-- Tab: Account Info --}}
     <div class="settings-tab-content" id="admin-tab-account">
         <div class="account-info-card admin-card">
             <div class="account-avatar">
@@ -160,12 +160,10 @@
         btn.classList.add('active');
     }
 
-    // Auto-open on success
     @if(session('admin_settings_success'))
         window.addEventListener('DOMContentLoaded', () => openAdminSettings());
     @endif
 
-    // Auto-open on password errors → switch to password tab
     @if($errors->hasAny(['current_password', 'new_password']))
         window.addEventListener('DOMContentLoaded', () => {
             openAdminSettings();
@@ -173,7 +171,6 @@
         });
     @endif
 
-    // Auto-open on profile errors → switch to profile tab
     @if($errors->hasAny(['full_name', 'department']))
         window.addEventListener('DOMContentLoaded', () => {
             openAdminSettings();

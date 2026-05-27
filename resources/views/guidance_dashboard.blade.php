@@ -296,7 +296,7 @@
             </button>
         </div>
     
-        {{-- ── Tab: Update Profile ── --}}
+        {{-- Tab: Update Profile --}}
         <div class="settings-tab-content active" id="tab-profile">
             <form action="{{ route('guidance.updateProfile') }}" method="POST">
                 @csrf
@@ -330,7 +330,7 @@
             </form>
         </div>
     
-        {{-- ── Tab: Change Password ── --}}
+        {{-- Tab: Change Password --}}
         <div class="settings-tab-content" id="tab-password">
             <form action="{{ route('guidance.updatePassword') }}" method="POST">
                 @csrf
@@ -363,7 +363,7 @@
             </form>
         </div>
     
-        {{-- ── Tab: Account Information ── --}}
+        {{-- Tab: Account Information --}}
         <div class="settings-tab-content" id="tab-account">
             <div class="account-info-card">
                 <div class="account-avatar">
@@ -434,7 +434,6 @@
             document.getElementById('settingsOverlay').classList.add('open');
             document.body.style.overflow = 'hidden';
  
-        // Auto-open to password tab if redirected after password change
         @if(session('settings_success') && str_contains(session('settings_success'), 'Password'))
             switchTab('password', document.querySelectorAll('.settings-tab')[1]);
         @endif
@@ -456,13 +455,10 @@
             btn.classList.add('active');
         }
     
-        // Auto-open settings if there's a settings_success message
-        // Auto-open settings on success OR on validation errors
         @if(session('settings_success') || $errors->any())
             window.addEventListener('DOMContentLoaded', () => openSettings());
         @endif
 
-        // Auto-switch to password tab if password errors exist
         @if($errors->has('current_password') || $errors->has('new_password'))
             window.addEventListener('DOMContentLoaded', () => {
                 openSettings();
@@ -470,7 +466,6 @@
             });
         @endif
 
-        // Auto-switch to profile tab if profile errors exist
         @if($errors->has('full_name') || $errors->has('department'))
             window.addEventListener('DOMContentLoaded', () => {
                 openSettings();

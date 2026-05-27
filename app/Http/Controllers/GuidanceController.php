@@ -92,7 +92,7 @@ class GuidanceController extends Controller
             ->with('success', 'Case ' . $report->case_id . ' has been restored to inbox.');
     }
 
-    // ── Update Profile (Full Name + Department) ──────────────────────────────
+    // Update Profile (Full Name and Department)
     public function updateProfile(Request $request)
     {
         $request->validate([

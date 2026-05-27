@@ -29,7 +29,7 @@
         </button>
     </div>
 
-    {{-- ── Tab: Update Profile ── --}}
+    {{-- Tab: Update Profile --}}
     <div class="settings-tab-content active" id="tab-profile">
         <form action="{{ route('student.updateProfile') }}" method="POST">
             @csrf
@@ -63,7 +63,7 @@
         </form>
     </div>
 
-    {{-- ── Tab: Change Password ── --}}
+    {{-- Tab: Change Password --}}
     <div class="settings-tab-content" id="tab-password">
         <form action="{{ route('student.updatePassword') }}" method="POST">
             @csrf
@@ -118,7 +118,6 @@
         btn.classList.add('active');
     }
 
-    // Auto-open on success
     @if(session('settings_success'))
         window.addEventListener('DOMContentLoaded', () => {
             openSettings();
@@ -128,7 +127,6 @@
         });
     @endif
 
-    // Auto-open on validation errors and switch to the right tab
     @if($errors->hasAny(['full_name', 'department']))
         window.addEventListener('DOMContentLoaded', () => {
             openSettings();

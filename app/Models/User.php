@@ -25,9 +25,7 @@ class User extends Authenticatable
         'remember_token',
     ];
 
-    /**
-     * Reports submitted by this user.
-     */
+    // Reports submitted by this user.
     public function reports()
     {
         return $this->hasMany(Report::class, 'user_id', 'id');

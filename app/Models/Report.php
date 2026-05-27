@@ -40,18 +40,14 @@ class Report extends Model
         'occurred_at' => 'datetime',
     ];
 
-    /**
-     * Relationship: The student who owns this report.
-     */
+    // Relationship: The student who owns this report.
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id', 'id');
     }
 
-    /**
-     * Relationship: All messages/responses linked to this report.
-     * This connects to your Response.php model and 'messages' table.
-     */
+    // Relationship: All messages/responses linked to this report.
+    //This connects to Response.php model and 'messages' table.
     public function messages()
     {
         // Using 'report_id' as the foreign key in the messages table

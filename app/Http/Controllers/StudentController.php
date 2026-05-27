@@ -9,10 +9,7 @@ use Illuminate\Support\Facades\Auth;
 
 class StudentController extends Controller
 {
-    /**
-     * Compute unread message count for the nav badge.
-     * Reused by dashboard() and messagesIndex().
-     */
+    // Compute unread message count for the nav badge. Reused by dashboard() and messagesIndex().
     private function getUnreadCount()
     {
         $studentId   = Auth::id();
@@ -24,10 +21,7 @@ class StudentController extends Controller
             ->count();
     }
 
-    /**
-     * Student dashboard — Report Concern page.
-     * Now passes globalUnreadCount so the nav badge works here too.
-     */
+    // Student dashboard — Report Concern page. Now passes globalUnreadCount so the nav badge works here too.
     public function dashboard(Request $request)
         {
             $globalUnreadCount = $this->getUnreadCount();
@@ -35,9 +29,7 @@ class StudentController extends Controller
             return view('student_dashboard', compact('globalUnreadCount'));
         }
 
-        /**
-     * Handle the "Share your concern" form submission.
-     */
+    // Handle the "Share your concern" form submission.
     public function submitReport(Request $request)
     {
         $request->validate([
@@ -55,9 +47,7 @@ class StudentController extends Controller
         return back()->with('success', 'Your concern has been submitted successfully!');
     }
 
-    /**
-     * My Reports page.
-     */
+    // My Reports page.
     public function myReports()
     {
         $reports = Report::where('user_id', Auth::id())
@@ -69,9 +59,7 @@ class StudentController extends Controller
         return view('my_reports', compact('reports', 'globalUnreadCount'));
     }
 
-    /**
-     * View a specific report.
-     */
+    // View a specific report
     public function viewReport($id)
     {
         $report = Report::where('report_id', $id)->firstOrFail();
@@ -85,9 +73,7 @@ class StudentController extends Controller
         return view('view_report', compact('report', 'globalUnreadCount'));
     }
 
-    /**
-     * Messages page.
-     */
+    // Messages page
     public function messagesIndex(Request $request)
     {
         $studentId = Auth::id();
@@ -114,9 +100,7 @@ class StudentController extends Controller
         return view('student_messages', compact('reports', 'selectedReport', 'globalUnreadCount'));
     }
 
-    /**
-     * Send a message (used by both student and guidance).
-     */
+    // Send a message (used by both student and guidance).
     public function sendMessage(Request $request)
     {
         $request->validate([

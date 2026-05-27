@@ -12,7 +12,7 @@ return new class extends Migration
    public function up(): void
     {
         Schema::table('messages', function (Blueprint $table) {
-            // We add is_read to track if the recipient has seen it
+            // Add is_read to track if the recipient has seen it
             $table->boolean('is_read')->default(false)->after('message_text');
         });
     }

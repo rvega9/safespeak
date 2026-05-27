@@ -33,7 +33,6 @@
         <div class="manage-accounts-container" style="max-width: 600px; margin: 0 auto;">
             <h3 style="margin-bottom: 20px;">Update Information for: <span style="color: var(--primary-blue);">{{ $user->username }}</span></h3>
 
-            {{-- Inside your manage-accounts-container form --}}
         <form action="{{ route('admin.updateUser', $user->id) }}" method="POST">
             @csrf
             
@@ -49,7 +48,7 @@
                 <input type="text" name="username" value="{{ old('username', $user->username) }}" required>
             </div>
 
-            {{-- Department (Conditional) --}}
+            {{-- Department --}}
             @if($user->role === 'student')
             <div class="input-group">
                 <label>Department</label>

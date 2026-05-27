@@ -33,7 +33,7 @@
         </div>
     </div>
 
-    {{-- ══ STUDENT MODAL ══ --}}
+    {{-- STUDENT MODAL --}}
     <div id="studentModal" class="modal">
         <div class="modal-content">
             <span class="close-btn" onclick="closeModal('studentModal')">&times;</span>
@@ -66,7 +66,7 @@
         </div>
     </div>
 
-    {{-- ══ GUIDANCE MODAL ══ --}}
+    {{-- GUIDANCE MODAL --}}
     <div id="guidanceModal" class="modal">
         <div class="modal-content guidance-theme">
             <span class="close-btn" onclick="closeModal('guidanceModal')">&times;</span>
@@ -98,7 +98,7 @@
         </div>
     </div>
 
-    {{-- ══ ADMIN MODAL ══ --}}
+    {{-- ADMIN MODAL --}}
     <div id="adminModal" class="modal">
         <div class="modal-content admin-theme">
             <span class="close-btn" onclick="closeModal('adminModal')">&times;</span>
@@ -137,15 +137,12 @@
             document.getElementById(id).style.display = "none";
         }
 
-        // Close modal if clicking outside the box
         window.onclick = function(event) {
             if (event.target.className === 'modal') {
                 event.target.style.display = "none";
             }
         }
 
-        // Auto-reopen the correct modal if login failed
-        // Laravel flashes the old 'role' input back so we know which portal was used
         @if($errors->any() && old('role'))
             window.addEventListener('DOMContentLoaded', function () {
                 const failedPortal = '{{ old('role') }}';

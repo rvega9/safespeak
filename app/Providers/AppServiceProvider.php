@@ -6,21 +6,17 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Report;
-use App\Models\Response; // Ensure this matches your Message model name
+use App\Models\Response; // Ensure this matches Message model name
 
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
+    // Register any application services.
     public function register(): void
     {
         //
     }
 
-    /**
-     * Bootstrap any application services.
-     */
+    // Bootstrap any application services.
     public function boot(): void
     {
         // Share unreadCount globally across all views

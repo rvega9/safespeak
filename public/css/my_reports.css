@@ -1,18 +1,17 @@
-/* public/css/my_reports.css */
 
 .reports-header {
     display: flex;
-    justify-content: space-between; /* Changed from space-around */
+    justify-content: space-between; 
     margin: 0 auto 30px auto;
-    width: 90%; /* Match this to your table width */
+    width: 90%; 
 }
 
 .page-title {
     font-size: 2.2rem;
     color: #111;
     margin-bottom: 40px;
-    text-align: center; /* Add this line */
-    width: 100%;       /* Ensures it takes up the full width of the card */
+    text-align: center; 
+    width: 100%;   
 }
 
 .header-box {
@@ -20,14 +19,14 @@
     padding: 10px 0;
     border-radius: 12px;
     font-weight: bold;
-    width: 30%; /* Gives each box an equal share */
+    width: 30%; 
     text-align: center;
     color: var(--primary-blue);
     background: white;
 }
 
 .reports-table {
-    width: 90%; /* Match the header container width */
+    width: 90%; 
     margin: 0 auto;
     border-collapse: collapse;
 }
@@ -36,10 +35,9 @@
     border-bottom: 1px solid #ddd;
 }
 
-/* This is the secret for perfect alignment */
 .reports-table td {
     padding: 25px 0;
-    width: 33.33%; /* Match the header box proportions */
+    width: 33.33%; 
     text-align: center;
     vertical-align: middle;
 }
@@ -50,7 +48,7 @@
 }
 
 .status-pill {
-    display: inline-block; /* Ensures the pill centers correctly */
+    display: inline-block; 
     padding: 6px 20px;
     border-radius: 20px;
     font-size: 0.8rem;
@@ -76,7 +74,6 @@
     border: 1px solid #b8daff;
 }
 
-/* Modal Overlay Background */
 .modal-overlay {
     display: none;
     position: fixed;
@@ -89,7 +86,6 @@
     backdrop-filter: blur(5px);
 }
 
-/* The Modal Content Box */
 .modal-content {
     background-color: #fff;
     margin: 8% auto;
@@ -142,58 +138,3 @@
     max-height: 250px;
     overflow-y: auto;
 }
-
-.withdraw-btn {
-            background: #c0392b;
-            color: #fff;
-            border: none;
-            padding: 8px 18px;
-            border-radius: 8px;
-            font-size: 0.82rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s;
-            font-family: 'DM Sans', sans-serif;
-        }
-        .withdraw-btn:hover { background: #a93226; }
-
-        .cancel-withdraw-btn {
-            background: #f0f0f0;
-            color: #555;
-            border: none;
-            padding: 8px 18px;
-            border-radius: 8px;
-            font-size: 0.82rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s;
-            font-family: 'DM Sans', sans-serif;
-        }
-        .cancel-withdraw-btn:hover { background: #e0e0e0; }
-
-        .alert-error {
-            background: #fdecea;
-            color: #7b1a1a;
-            padding: 10px 14px;
-            border-radius: 8px;
-            margin-bottom: 14px;
-            font-size: 0.82rem;
-            font-weight: 500;
-            border: 1px solid #f5c6cb;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .alert-success {
-            background: #edfbee;
-            color: #145523;
-            padding: 10px 14px;
-            border-radius: 8px;
-            margin-bottom: 14px;
-            font-size: 0.82rem;
-            font-weight: 500;
-            border: 1px solid #c3e6cb;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
