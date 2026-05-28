@@ -10,12 +10,17 @@ use Illuminate\Support\Facades\Auth;
 class AdminController extends Controller
 {
     public function dashboard()
-    {
-        $students  = User::where('role', 'student')->orderBy('created_at', 'desc')->get();
-        $guidances = User::where('role', 'guidance')->orderBy('created_at', 'desc')->get();
+        {
+            $students  = User::where('role', 'student')
+                            ->orderBy('created_at', 'desc')
+                            ->paginate(10, ['*'], 'students_page');
 
-        return view('admin_dashboard', compact('students', 'guidances'));
-    }
+            $guidances = User::where('role', 'guidance')
+                            ->orderBy('created_at', 'desc')
+                            ->paginate(5, ['*'], 'guidances_page');
+
+            return view('admin_dashboard', compact('students', 'guidances'));
+        }
 
     public function registerStudent(Request $request)
     {
@@ -89,12 +94,34 @@ class AdminController extends Controller
         return redirect()->route('admin.manageAccounts')->with('msg', 'updated');
     }
 
-    public function manageAccounts()
-    {
-        // Only active (non-soft-deleted) users appear in the table
-        $users = User::orderBy('created_at', 'desc')->get();
-        return view('manage_accounts', compact('users'));
-    }
+    public function manageAccounts(Request $request)
+        {
+            $search = $request->query('search', '');
+            $tab    = $request->query('tab', 'students');
+
+            $studentsQuery = User::where('role', 'student')
+                                ->orderBy('created_at', 'desc');
+
+            $guidanceQuery = User::where('role', 'guidance')
+                                ->orderBy('created_at', 'desc');
+
+            if ($search) {
+                $studentsQuery->where(function($q) use ($search) {
+                    $q->where('username', 'like', "%{$search}%")
+                    ->orWhere('full_name', 'like', "%{$search}%")
+                    ->orWhere('department', 'like', "%{$search}%");
+                });
+                $guidanceQuery->where(function($q) use ($search) {
+                    $q->where('username', 'like', "%{$search}%")
+                    ->orWhere('full_name', 'like', "%{$search}%");
+                });
+            }
+
+            $students  = $studentsQuery->paginate(10, ['*'], 'students_page')->withQueryString();
+            $guidances = $guidanceQuery->paginate(10, ['*'], 'guidances_page')->withQueryString();
+
+            return view('manage_accounts', compact('students', 'guidances', 'search', 'tab'));
+        }
 
     public function deleteUser($id)
     {

@@ -59,8 +59,16 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/student/settings/profile',    [StudentController::class, 'updateProfile'])->name('student.updateProfile');
     Route::patch('/student/settings/password',   [StudentController::class, 'updatePassword'])->name('student.updatePassword');
 
-    // SHARED MESSAGING ACTION
+    // ── REAL-TIME CHAT ROUTES ─────────────────────────────────────────────────
+    // Send a message (JSON response — used by both student and guidance via fetch)
     Route::post('/messages/send', [StudentController::class, 'sendMessage'])->name('messages.send');
+
+    // Poll for new messages since a given message ID (JSON)
+    Route::get('/messages/poll/{reportId}', [StudentController::class, 'pollMessages'])->name('messages.poll');
+
+    // Mark messages as read (JSON)
+    Route::post('/messages/read/{reportId}', [StudentController::class, 'markAsRead'])->name('messages.read');
+    // ─────────────────────────────────────────────────────────────────────────
 
     // GUIDANCE ROUTES
     Route::get('/guidance/dashboard',                    [GuidanceController::class, 'index'])->name('guidance.dashboard');
@@ -74,8 +82,6 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/profile',    [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile',  [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-
-    
 });
 
 require __DIR__.'/auth.php';

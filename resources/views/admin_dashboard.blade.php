@@ -183,6 +183,12 @@
                             </tbody>
                         </table>
                     </div>
+                    {{-- Pagination --}}
+                    @if($students->hasPages())
+                        <div class="pagination-wrapper">
+                            {{ $students->links('partials.pagination') }}
+                        </div>
+                    @endif
                 </div>
 
                 <div>
@@ -212,6 +218,12 @@
                             </tbody>
                         </table>
                     </div>
+                    {{-- Pagination --}}
+                    @if($guidances->hasPages())
+                        <div class="pagination-wrapper">
+                            {{ $guidances->links('partials.pagination') }}
+                        </div>
+                    @endif
                 </div>
 
             </div>

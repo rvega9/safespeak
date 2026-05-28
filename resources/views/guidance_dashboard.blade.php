@@ -7,6 +7,8 @@
     <link rel="icon" type="image/png" href="{{ asset('assets/logo2.png') }}">
     <link rel="stylesheet" href="{{ asset('css/guidance_style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    {{-- CSRF token for fetch() requests --}}
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 </head>
 <body class="guidance-body">
 
@@ -107,13 +109,16 @@
                             ->count();
                     @endphp
                     <a href="{{ route('guidance.dashboard', array_merge(request()->query(), ['report' => $report->report_id])) }}"
-                       class="report-item {{ $selectedReport && $selectedReport->report_id == $report->report_id ? 'active' : '' }}">
+                       class="report-item {{ $selectedReport && $selectedReport->report_id == $report->report_id ? 'active' : '' }}"
+                       data-report-id="{{ $report->report_id }}">
                         <div class="report-meta">
                             <strong>
                                 {{ $report->case_id }}
-                                @if($unreadCount > 0)
-                                    <span class="unread-badge">{{ $unreadCount }}</span>
-                                @endif
+                                {{-- Unread badge: toggled in real-time by JS --}}
+                                <span class="unread-badge" id="badge-{{ $report->report_id }}"
+                                      style="{{ $unreadCount > 0 ? '' : 'display:none;' }}">
+                                    {{ $unreadCount }}
+                                </span>
                             </strong>
                             <span>{{ $report->created_at->diffForHumans() }}</span>
                         </div>
@@ -147,13 +152,19 @@
                     </div>
                 @endif
 
-                {{-- Merged compact conversation header --}}
+                {{-- Compact conversation header --}}
                 <div class="conv-header">
                     <div class="conv-header-left">
                         <div class="conv-header-title">
                             <span class="conv-case-id">{{ $selectedReport->case_id }}</span>
                             <span class="status-badge {{ $selectedReport->status }}">
                                 {{ ucfirst(str_replace('_', ' ', $selectedReport->status)) }}
+                            </span>
+                            {{-- Live indicator --}}
+                            <span id="liveIndicator" style="font-size:0.7rem; font-weight:400; color:#22c55e;
+                                  margin-left:8px; opacity:0; transition: opacity 0.4s;">
+                                <span style="display:inline-block; width:7px; height:7px; border-radius:50%;
+                                             background:#22c55e; margin-right:3px; vertical-align:middle;"></span>Live
                             </span>
                         </div>
                         <div class="conv-header-meta">
@@ -206,9 +217,14 @@
                         </div>
                     </div>
 
+                    @php $lastMessageId = 0; @endphp
                     @foreach($selectedReport->messages as $msg)
-                        <div class="chat-bubble {{ $msg->user_id == auth()->id() ? 'guidance-msg' : 'student-msg' }}"
-                             data-sender="{{ $msg->user_id == auth()->id() ? 'You' : 'Student' }}">
+                        @php
+                            $isMe = ($msg->user_id == auth()->id());
+                            if ($msg->message_id > $lastMessageId) $lastMessageId = $msg->message_id;
+                        @endphp
+                        <div class="chat-bubble {{ $isMe ? 'guidance-msg' : 'student-msg' }}"
+                             data-sender="{{ $isMe ? 'You' : 'Student' }}">
                             <div class="bubble-text">
                                 {!! nl2br(e($msg->message_text)) !!}
                                 <small>{{ $msg->created_at->format('h:i A') }}</small>
@@ -220,17 +236,22 @@
                 {{-- Reply Form --}}
                 @if(!$selectedReport->is_archived)
                 <div class="chat-input-container">
-                    <form action="{{ route('messages.send') }}" method="POST">
-                        @csrf
-                        <input type="hidden" name="report_id" value="{{ $selectedReport->report_id }}">
-                        <div class="input-wrapper">
-                            <textarea name="message_text" placeholder="Type your response here..." required autocomplete="off" rows="1" style="resize:none; overflow:hidden;"></textarea>
-                            <button type="submit" class="send-btn">Send</button>
-                        </div>
-                    </form>
+                    <input type="hidden" id="reportId" value="{{ $selectedReport->report_id }}">
+                    <div class="input-wrapper">
+                        <textarea id="messageInput"
+                                  placeholder="Type your response here..."
+                                  autocomplete="off"
+                                  rows="1"
+                                  style="resize:none; overflow:hidden;"></textarea>
+                        <button id="sendBtn" class="send-btn" onclick="sendMessage()">Send</button>
+                    </div>
+                    <div id="sendingIndicator" style="font-size:0.75rem; color:#94a3b8; padding:2px 4px; display:none;">
+                        <i class="fas fa-circle-notch fa-spin"></i> Sending...
+                    </div>
                 </div>
                 @else
-                <div style="text-align:center; padding:12px; background:#fff3cd; border-radius:8px; font-size:0.82rem; color:#8a6400; margin-top:8px;">
+                <div style="text-align:center; padding:12px; background:#fff3cd; border-radius:8px;
+                            font-size:0.82rem; color:#8a6400; margin-top:8px;">
                     <i class="fas fa-lock"></i> This case is archived. Restore it to inbox to send messages.
                 </div>
                 @endif
@@ -392,82 +413,230 @@
     </div>
 
     <script>
-        const chatWindow = document.getElementById('chatWindow');
-        if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
+    // ─── CONFIG ───────────────────────────────────────────────────────────────
+    const REPORT_ID    = {{ $selectedReport ? $selectedReport->report_id : 'null' }};
+    const CURRENT_USER = {{ auth()->id() }};
+    const POLL_URL     = "{{ route('messages.poll', ['reportId' => $selectedReport ? $selectedReport->report_id : 0]) }}";
+    const SEND_URL     = "{{ route('messages.send') }}";
+    const CSRF         = document.querySelector('meta[name="csrf-token"]').content;
 
-        document.addEventListener('input', function(e) {
-            if (e.target.name === 'message_text') {
-                e.target.style.height = 'auto';
-                const maxHeight = 120;
-                if (e.target.scrollHeight <= maxHeight) {
-                    e.target.style.height = e.target.scrollHeight + 'px';
-                    e.target.style.overflowY = 'hidden';
-                } else {
-                    e.target.style.height = maxHeight + 'px';
-                    e.target.style.overflowY = 'auto';
-                }
+    let lastMessageId = {{ $lastMessageId ?? 0 }};
+    let pollTimer     = null;
+    let isSending     = false;
+
+    // ─── SCROLL HELPER ────────────────────────────────────────────────────────
+    function scrollToBottom() {
+        const win = document.getElementById('chatWindow');
+        if (win) win.scrollTop = win.scrollHeight;
+    }
+
+    // ─── BUILD A CHAT BUBBLE ──────────────────────────────────────────────────
+    function buildBubble(text, isMine, time, sender) {
+        const div = document.createElement('div');
+        div.className = 'chat-bubble ' + (isMine ? 'guidance-msg' : 'student-msg');
+        if (sender) div.setAttribute('data-sender', sender);
+
+        const escaped = text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\n/g, '<br>');
+
+        div.innerHTML = `<div class="bubble-text">${escaped}<small>${time}</small></div>`;
+        return div;
+    }
+
+    // ─── SEND MESSAGE ─────────────────────────────────────────────────────────
+    async function sendMessage() {
+        if (!REPORT_ID || isSending) return;
+
+        const input = document.getElementById('messageInput');
+        const text  = input.value.trim();
+        if (!text) return;
+
+        isSending = true;
+        document.getElementById('sendBtn').disabled = true;
+        document.getElementById('sendingIndicator').style.display = 'block';
+
+        try {
+            const res  = await fetch(SEND_URL, {
+                method:  'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': CSRF,
+                    'Accept':       'application/json',
+                },
+                body: JSON.stringify({
+                    report_id:    REPORT_ID,
+                    message_text: text,
+                }),
+            });
+
+            const data = await res.json();
+
+            if (data.success) {
+                const bubble = buildBubble(data.text, true, data.time, 'You');
+                document.getElementById('chatWindow').appendChild(bubble);
+                lastMessageId = Math.max(lastMessageId, data.message_id);
+                input.value = '';
+                input.style.height = 'auto';
+                scrollToBottom();
+            } else {
+                alert('Failed to send message. Please try again.');
             }
-        });
+        } catch (err) {
+            console.error('Send error:', err);
+            alert('Network error. Please check your connection.');
+        } finally {
+            isSending = false;
+            document.getElementById('sendBtn').disabled = false;
+            document.getElementById('sendingIndicator').style.display = 'none';
+        }
+    }
 
-        function showArchiveConfirm(caseId, reportId) {
-            document.getElementById('confirmText').innerText =
-                'This will move ' + caseId + ' to the archived section. You can restore it anytime.';
-            document.getElementById('archiveForm').action =
-                '/guidance/report/' + reportId + '/archive';
-            document.getElementById('archiveConfirm').classList.add('show');
+    // ─── POLL FOR NEW MESSAGES (student replies) ──────────────────────────────
+    async function pollMessages() {
+        if (!REPORT_ID) return;
+
+        try {
+            const res  = await fetch(`${POLL_URL}?after=${lastMessageId}`, {
+                headers: {
+                    'Accept':       'application/json',
+                    'X-CSRF-TOKEN': CSRF,
+                },
+            });
+
+            const data = await res.json();
+
+            if (data.messages && data.messages.length > 0) {
+                const win = document.getElementById('chatWindow');
+                data.messages.forEach(msg => {
+                    // Skip own messages already rendered via sendMessage()
+                    if (msg.user_id === CURRENT_USER) {
+                        lastMessageId = Math.max(lastMessageId, msg.message_id);
+                        return;
+                    }
+                    const bubble = buildBubble(msg.text, false, msg.time, 'Student');
+                    win.appendChild(bubble);
+                    lastMessageId = Math.max(lastMessageId, msg.message_id);
+
+                    // Clear unread badge for this report in the left sidebar
+                    const badge = document.getElementById('badge-' + REPORT_ID);
+                    if (badge) badge.style.display = 'none';
+                });
+                scrollToBottom();
+            }
+
+            showLive();
+
+        } catch (err) {
+            console.warn('Poll error:', err);
+        }
+    }
+
+    // ─── LIVE INDICATOR ──────────────────────────────────────────────────────
+    let liveTimer = null;
+    function showLive() {
+        const el = document.getElementById('liveIndicator');
+        if (!el) return;
+        el.style.opacity = '1';
+        clearTimeout(liveTimer);
+        liveTimer = setTimeout(() => el.style.opacity = '0', 3000);
+    }
+
+    // ─── SEND ON ENTER ────────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', function () {
+        const input = document.getElementById('messageInput');
+        if (input) {
+            input.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+
+            // Auto-resize textarea
+            input.addEventListener('input', function () {
+                this.style.height = 'auto';
+                const maxHeight = 120;
+                if (this.scrollHeight <= maxHeight) {
+                    this.style.height = this.scrollHeight + 'px';
+                    this.style.overflowY = 'hidden';
+                } else {
+                    this.style.height = maxHeight + 'px';
+                    this.style.overflowY = 'auto';
+                }
+            });
         }
 
-        function hideArchiveConfirm() {
-            document.getElementById('archiveConfirm').classList.remove('show');
+        scrollToBottom();
+
+        // Start polling
+        if (REPORT_ID) {
+            pollMessages();
+            pollTimer = setInterval(pollMessages, 3000);
         }
+    });
 
-        document.getElementById('archiveConfirm').addEventListener('click', function(e) {
-            if (e.target === this) hideArchiveConfirm();
-        });
+    window.addEventListener('beforeunload', () => clearInterval(pollTimer));
 
-        function openSettings() {
-            document.getElementById('settingsPanel').classList.add('open');
-            document.getElementById('settingsOverlay').classList.add('open');
-            document.body.style.overflow = 'hidden';
- 
+    // ─── EXISTING GUIDANCE JS (archive modal, settings panel) ────────────────
+    function showArchiveConfirm(caseId, reportId) {
+        document.getElementById('confirmText').innerText =
+            'This will move ' + caseId + ' to the archived section. You can restore it anytime.';
+        document.getElementById('archiveForm').action =
+            '/guidance/report/' + reportId + '/archive';
+        document.getElementById('archiveConfirm').classList.add('show');
+    }
+
+    function hideArchiveConfirm() {
+        document.getElementById('archiveConfirm').classList.remove('show');
+    }
+
+    document.getElementById('archiveConfirm').addEventListener('click', function(e) {
+        if (e.target === this) hideArchiveConfirm();
+    });
+
+    function openSettings() {
+        document.getElementById('settingsPanel').classList.add('open');
+        document.getElementById('settingsOverlay').classList.add('open');
+        document.body.style.overflow = 'hidden';
+
         @if(session('settings_success') && str_contains(session('settings_success'), 'Password'))
             switchTab('password', document.querySelectorAll('.settings-tab')[1]);
         @endif
-        }
-    
-        function closeSettings() {
-            document.getElementById('settingsPanel').classList.remove('open');
-            document.getElementById('settingsOverlay').classList.remove('open');
-            document.body.style.overflow = '';
-        }
-    
-        function switchTab(tabName, btn) {
-            // Hide all tab contents
-            document.querySelectorAll('.settings-tab-content').forEach(t => t.classList.remove('active'));
-            // Deactivate all tab buttons
-            document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
-            // Show selected
-            document.getElementById('tab-' + tabName).classList.add('active');
-            btn.classList.add('active');
-        }
-    
-        @if(session('settings_success') || $errors->any())
-            window.addEventListener('DOMContentLoaded', () => openSettings());
-        @endif
+    }
 
-        @if($errors->has('current_password') || $errors->has('new_password'))
-            window.addEventListener('DOMContentLoaded', () => {
-                openSettings();
-                switchTab('password', document.querySelectorAll('.settings-tab')[1]);
-            });
-        @endif
+    function closeSettings() {
+        document.getElementById('settingsPanel').classList.remove('open');
+        document.getElementById('settingsOverlay').classList.remove('open');
+        document.body.style.overflow = '';
+    }
 
-        @if($errors->has('full_name') || $errors->has('department'))
-            window.addEventListener('DOMContentLoaded', () => {
-                openSettings();
-                switchTab('profile', document.querySelectorAll('.settings-tab')[0]);
-            });
-        @endif
+    function switchTab(tabName, btn) {
+        document.querySelectorAll('.settings-tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
+        document.getElementById('tab-' + tabName).classList.add('active');
+        btn.classList.add('active');
+    }
+
+    @if(session('settings_success') || $errors->any())
+        window.addEventListener('DOMContentLoaded', () => openSettings());
+    @endif
+
+    @if($errors->has('current_password') || $errors->has('new_password'))
+        window.addEventListener('DOMContentLoaded', () => {
+            openSettings();
+            switchTab('password', document.querySelectorAll('.settings-tab')[1]);
+        });
+    @endif
+
+    @if($errors->has('full_name') || $errors->has('department'))
+        window.addEventListener('DOMContentLoaded', () => {
+            openSettings();
+            switchTab('profile', document.querySelectorAll('.settings-tab')[0]);
+        });
+    @endif
     </script>
 </body>
 </html>

@@ -897,5 +897,66 @@ body.student-body {
 
 @media (max-width: 480px) {
     .settings-panel { width: 100%; right: -100%; }
-    .settings-panel.open { right: 0; }
+    .settings-panel.open { right: 0; }  
+}
+
+/* ── Pagination ─────────────────────────────── */
+.pagination-wrapper {
+    display: flex;
+    justify-content: center;
+    margin-top: 16px;
+    padding-bottom: 8px;
+}
+
+.safespeak-pagination {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.page-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    height: 34px;
+    padding: 0 10px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #2b7cd3;
+    background: #f0f4ff;
+    border: 1px solid #dce6f7;
+    text-decoration: none;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.page-btn:hover:not(.disabled):not(.current):not(.dots) {
+    background: #2b7cd3;
+    color: #fff;
+    border-color: #2b7cd3;
+}
+
+.page-btn.current {
+    background: #2b7cd3;
+    color: #fff;
+    border-color: #2b7cd3;
+    cursor: default;
+}
+
+.page-btn.disabled {
+    color: #b0b7c3;
+    background: #f7f8fa;
+    border-color: #e8eaf0;
+    cursor: not-allowed;
+}
+
+.page-btn.dots {
+    background: transparent;
+    border-color: transparent;
+    color: #b0b7c3;
+    cursor: default;
 }

@@ -75,30 +75,36 @@
 
             {{-- Tabs --}}
             @php
-                $studentCount  = $users->where('role', 'student')->count();
-                $guidanceCount = $users->where('role', 'guidance')->count();
+                $studentCount  = $students->total();
+                $guidanceCount = $guidances->total();
             @endphp
 
             <div class="account-tabs">
-                <button class="account-tab active" onclick="switchTab('students', this)">
+                <a href="{{ request()->fullUrlWithQuery(['tab' => 'students', 'students_page' => 1]) }}"
+                class="account-tab {{ $tab === 'students' ? 'active' : '' }}">
                     <i class="fas fa-user-graduate"></i>
                     Students
-                    <span class="tab-badge">{{ $studentCount }}</span>
-                </button>
-                <button class="account-tab guidance-tab" onclick="switchTab('guidance', this)">
+                    <span class="tab-badge">{{ $students->total() }}</span>
+                </a>
+                <a href="{{ request()->fullUrlWithQuery(['tab' => 'guidance', 'guidances_page' => 1]) }}"
+                class="account-tab guidance-tab {{ $tab === 'guidance' ? 'active' : '' }}">
                     <i class="fas fa-user-tie"></i>
                     Guidance Counselors
-                    <span class="tab-badge">{{ $guidanceCount }}</span>
-                </button>
+                    <span class="tab-badge">{{ $guidances->total() }}</span>
+                </a>
             </div>
 
             {{-- STUDENTS TAB --}}
-            <div class="tab-panel active" id="tab-students">
-                <div class="tab-search">
-                    <input type="text" id="searchStudents"
-                           placeholder="Search by USN / ID or name..."
-                           oninput="filterTable('studentsTable', this.value)">
-                </div>
+            {{-- Shared search form --}}
+            <form method="GET" action="{{ route('admin.manageAccounts') }}" class="tab-search" id="searchForm">
+                <input type="hidden" name="tab" value="{{ $tab }}">
+                <input type="text"
+                    name="search"
+                    value="{{ $search }}"
+                    placeholder="{{ $tab === 'students' ? 'Search by USN / ID or name...' : 'Search by Employee ID or name...' }}"
+                    oninput="debounceSearch()">
+            </form>
+            <div class="tab-panel {{ $tab === 'students' ? 'active' : '' }}" id="tab-students">
                 <div class="table-wrapper">
                     <table class="custom-table" id="studentsTable">
                         <thead>
@@ -111,8 +117,8 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse($users->where('role', 'student') as $user)
-                                <tr class="searchable-row">
+                            @forelse($students as $user)
+                                <tr>
                                     <td class="username-cell col-left">{{ $user->username }}</td>
                                     <td class="col-left">{{ $user->full_name }}</td>
                                     <td>{{ $user->department ?: 'N/A' }}</td>
@@ -136,23 +142,20 @@
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="5" class="no-data">No students registered yet.</td></tr>
+                                <tr><td colspan="5" class="no-data">No students found.</td></tr>
                             @endforelse
-                            <tr class="no-results" id="noResultsStudents">
-                                <td colspan="5">No results match your search.</td>
-                            </tr>
                         </tbody>
                     </table>
                 </div>
+                @if($students->hasPages())
+                    <div class="pagination-wrapper">
+                        {{ $students->links('partials.pagination') }}
+                    </div>
+                @endif
             </div>
 
             {{-- GUIDANCE TAB --}}
-            <div class="tab-panel" id="tab-guidance">
-                <div class="tab-search">
-                    <input type="text" id="searchGuidance"
-                           placeholder="Search by Employee ID or name..."
-                           oninput="filterTable('guidanceTable', this.value)">
-                </div>
+            <div class="tab-panel {{ $tab === 'guidance' ? 'active' : '' }}" id="tab-guidance">
                 <div class="table-wrapper">
                     <table class="custom-table" id="guidanceTable">
                         <thead>
@@ -165,8 +168,8 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse($users->where('role', 'guidance') as $user)
-                                <tr class="searchable-row">
+                            @forelse($guidances as $user)
+                                <tr>
                                     <td class="username-cell col-left">{{ $user->username }}</td>
                                     <td class="col-left">{{ $user->full_name }}</td>
                                     <td>{{ $user->department ?: 'Guidance Office' }}</td>
@@ -190,47 +193,31 @@
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="5" class="no-data">No counselors registered yet.</td></tr>
+                                <tr><td colspan="5" class="no-data">No counselors found.</td></tr>
                             @endforelse
-                            <tr class="no-results" id="noResultsGuidance">
-                                <td colspan="5">No results match your search.</td>
-                            </tr>
                         </tbody>
                     </table>
                 </div>
+                @if($guidances->hasPages())
+                    <div class="pagination-wrapper">
+                        {{ $guidances->links('partials.pagination') }}
+                    </div>
+                @endif
             </div>
 
         </div>
     </main>
 
     <script>
-        // Tab switching 
-        function switchTab(tabName, btn) {
-            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.account-tab').forEach(b => b.classList.remove('active'));
-            document.getElementById('tab-' + tabName).classList.add('active');
-            btn.classList.add('active');
-        }
+        // Tab switching is now handled by URL — no JS needed for tabs
 
-        // Live search filter
-        function filterTable(tableId, query) {
-            const table    = document.getElementById(tableId);
-            const rows     = table.querySelectorAll('tr.searchable-row');
-            const noResult = table.querySelector('.no-results');
-            const q        = query.toLowerCase().trim();
-            let visible    = 0;
-
-            rows.forEach(row => {
-                const text = row.textContent.toLowerCase();
-                if (text.includes(q)) {
-                    row.style.display = '';
-                    visible++;
-                } else {
-                    row.style.display = 'none';
-                }
-            });
-
-            if (noResult) noResult.style.display = visible === 0 ? 'table-row' : 'none';
+        // Debounced server-side search
+        let searchTimer;
+        function debounceSearch() {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => {
+                document.getElementById('searchForm').submit();
+            }, 400); // submits 400ms after user stops typing
         }
 
         // Hamburger

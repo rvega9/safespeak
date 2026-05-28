@@ -93,6 +93,12 @@
                         @endforeach
                     </tbody>
                 </table>
+
+                @if($reports->hasPages())
+                    <div class="pagination-wrapper" style="margin-top: 20px; text-align: center;">
+                        {{ $reports->links('partials.pagination') }}
+                    </div>
+                @endif
             @endif
         </div>
     </main>

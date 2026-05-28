@@ -21,13 +21,12 @@ class StudentController extends Controller
             ->count();
     }
 
-    // Student dashboard — Report Concern page. Now passes globalUnreadCount so the nav badge works here too.
+    // Student dashboard — Report Concern page.
     public function dashboard(Request $request)
-        {
-            $globalUnreadCount = $this->getUnreadCount();
-
-            return view('student_dashboard', compact('globalUnreadCount'));
-        }
+    {
+        $globalUnreadCount = $this->getUnreadCount();
+        return view('student_dashboard', compact('globalUnreadCount'));
+    }
 
     // Handle the "Share your concern" form submission.
     public function submitReport(Request $request)
@@ -52,7 +51,7 @@ class StudentController extends Controller
     {
         $reports = Report::where('user_id', Auth::id())
                     ->orderBy('created_at', 'desc')
-                    ->get();
+                    ->paginate(10);
 
         $globalUnreadCount = $this->getUnreadCount();
 
@@ -100,34 +99,118 @@ class StudentController extends Controller
         return view('student_messages', compact('reports', 'selectedReport', 'globalUnreadCount'));
     }
 
-    // Send a message (used by both student and guidance).
+    /**
+     * Send a message — returns JSON (used by fetch() for real-time chat).
+     * Works for both student and guidance since both share this route.
+     */
     public function sendMessage(Request $request)
     {
         $request->validate([
             'report_id'    => 'required|exists:reports,report_id',
-            'message_text' => 'required|string',
+            'message_text' => 'required|string|max:5000',
         ]);
 
-        Response::create([
+        // Make sure the user actually belongs to this report (student = owner, guidance = any)
+        $report = Report::findOrFail($request->report_id);
+        $user   = auth()->user();
+
+        if ($user->role === 'student' && $report->user_id !== $user->id) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $message = Response::create([
             'report_id'    => $request->report_id,
-            'user_id'      => Auth::id(),
+            'user_id'      => $user->id,
             'message_text' => $request->message_text,
             'is_read'      => false,
         ]);
 
-        return back()->with('success', 'Message sent!');
+        // Return the saved message as JSON so the frontend can render it immediately
+        return response()->json([
+            'success'    => true,
+            'message_id' => $message->message_id,
+            'user_id'    => $message->user_id,
+            'text'       => $message->message_text,
+            'time'       => $message->created_at->format('h:i A'),
+            'sender'     => $user->role, // 'student' or 'guidance'
+        ]);
+    }
+
+    /**
+     * Poll for new messages after a given message_id.
+     * Called every 3 seconds by the frontend JS.
+     */
+    public function pollMessages(Request $request, $reportId)
+    {
+        $report = Report::findOrFail($reportId);
+        $user   = auth()->user();
+
+        // Security: students can only poll their own reports
+        if ($user->role === 'student' && $report->user_id !== $user->id) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $afterId = $request->query('after', 0); // last message_id the client already has
+
+        $messages = Response::where('report_id', $reportId)
+            ->where('message_id', '>', $afterId)
+            ->orderBy('created_at', 'asc')
+            ->get()
+            ->map(function ($msg) use ($user) {
+                return [
+                    'message_id' => $msg->message_id,
+                    'user_id'    => $msg->user_id,
+                    'text'       => $msg->message_text,
+                    'time'       => $msg->created_at->format('h:i A'),
+                    'is_mine'    => ($msg->user_id === $user->id),
+                ];
+            });
+
+        // Auto-mark incoming messages as read while polling
+        Response::where('report_id', $reportId)
+            ->where('user_id', '!=', $user->id)
+            ->where('is_read', false)
+            ->update(['is_read' => true]);
+
+        // Return updated unread count for nav badge (students only)
+        $unreadCount = 0;
+        if ($user->role === 'student') {
+            $myReportIds = Report::where('user_id', $user->id)->pluck('report_id');
+            $unreadCount = Response::whereIn('report_id', $myReportIds)
+                ->where('user_id', '!=', $user->id)
+                ->where('is_read', false)
+                ->count();
+        }
+
+        return response()->json([
+            'messages'     => $messages,
+            'unread_count' => $unreadCount,
+        ]);
+    }
+
+    /**
+     * Mark all messages in a report as read (called when switching conversations).
+     */
+    public function markAsRead(Request $request, $reportId)
+    {
+        $user = auth()->user();
+
+        Response::where('report_id', $reportId)
+            ->where('user_id', '!=', $user->id)
+            ->where('is_read', false)
+            ->update(['is_read' => true]);
+
+        return response()->json(['success' => true]);
     }
 
     public function withdrawReport($id)
     {
         $report = Report::where('report_id', $id)->firstOrFail();
 
-        // Make sure only the owner can withdraw
         if ($report->user_id !== auth()->id()) {
             abort(403, 'Unauthorized.');
         }
 
-        // Only allow withdrawal if still pending
         if ($report->status !== 'pending') {
             return back()->with('error', 'You can only withdraw reports that are still pending.');
         }
