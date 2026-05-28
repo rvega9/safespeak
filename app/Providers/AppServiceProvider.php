@@ -5,8 +5,10 @@ namespace App\Providers;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\URL;
 use App\Models\Report;
-use App\Models\Response; // Ensure this matches Message model name
+use App\Models\Response;
+
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -19,6 +21,10 @@ class AppServiceProvider extends ServiceProvider
     // Bootstrap any application services.
     public function boot(): void
     {
+        if (env('APP_ENV') === 'production') {
+            URL::forceScheme('https');
+        }
+
         // Share unreadCount globally across all views
         View::composer('*', function ($view) {
             if (Auth::check()) {
