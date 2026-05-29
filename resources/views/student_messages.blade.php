@@ -7,7 +7,6 @@
     <link rel="icon" type="image/png" href="{{ asset('assets/logo2.png') }}">
     <link rel="stylesheet" href="{{ asset('css/student_style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    {{-- CSRF token for fetch() requests --}}
     <meta name="csrf-token" content="{{ csrf_token() }}">
 </head>
 <body class="student-body">
@@ -24,8 +23,8 @@
             <a href="{{ route('student.reports') }}" class="nav-link {{ request()->routeIs('student.reports*') ? 'active' : '' }}">My Reports</a>
             <a href="{{ route('student.messages') }}" class="nav-link {{ request()->routeIs('student.messages') ? 'active' : '' }}">
                 Messages
-                {{-- Badge: updated in real-time by JS --}}
-                <span class="nav-badge" id="navUnreadBadge" style="{{ (isset($globalUnreadCount) && $globalUnreadCount > 0) ? '' : 'display:none;' }}">
+                <span class="nav-badge" id="navUnreadBadge"
+                      style="{{ (isset($globalUnreadCount) && $globalUnreadCount > 0) ? '' : 'display:none;' }}">
                     {{ $globalUnreadCount ?? 0 }}
                 </span>
             </a>
@@ -48,25 +47,33 @@
             <div class="report-list" id="conversationList">
                 @forelse($reports as $report)
                     @php
-                        $unread = $report->messages
-                            ->where('is_read', false)
-                            ->where('user_id', '!=', auth()->id())
-                            ->count();
+                        $latestMsg    = $report->messages->last();
+                        $unread       = $report->messages->where('is_read', false)->where('user_id', '!=', auth()->id())->count();
+                        $preview      = $latestMsg ? Str::limit($latestMsg->message_text, 38) : Str::limit($report->description, 38);
+                        $previewLabel = $latestMsg ? ($latestMsg->user_id == auth()->id() ? 'You: ' : 'Guidance: ') : '';
+                        $lastActivity = $latestMsg ? $latestMsg->created_at->timestamp : $report->created_at->timestamp;
                     @endphp
                     <a href="{{ route('student.messages', ['report' => $report->report_id]) }}"
                        class="report-item {{ $selectedReport && $selectedReport->report_id == $report->report_id ? 'active' : '' }}"
+                       id="conv-{{ $report->report_id }}"
                        data-report-id="{{ $report->report_id }}"
-                       style="text-decoration: none; display: block; color: inherit;">
+                       data-last-activity="{{ $lastActivity }}"
+                       style="text-decoration:none; display:block; color:inherit;">
                         <div class="report-meta">
-                            <strong>
+                            <strong id="conv-title-{{ $report->report_id }}"
+                                    style="{{ $unread > 0 ? 'font-weight:700;' : '' }}">
                                 {{ $report->case_id }}
-                                {{-- Unread dot: toggled by JS --}}
                                 <span class="unread-dot" id="dot-{{ $report->report_id }}"
                                       style="{{ $unread > 0 ? '' : 'display:none;' }}"></span>
                             </strong>
-                            <span>{{ $report->created_at->format('M d') }}</span>
+                            <span id="conv-time-{{ $report->report_id }}"
+                                  style="font-size:0.75rem; color:#94a3b8;">
+                                {{ $latestMsg ? $latestMsg->created_at->diffForHumans() : $report->created_at->format('M d') }}
+                            </span>
                         </div>
-                        <p class="summary-preview">{{ Str::limit($report->description, 38) }}</p>
+                        <p class="summary-preview" id="conv-preview-{{ $report->report_id }}">
+                            <span style="color:#94a3b8; font-size:0.8rem;">{{ $previewLabel }}</span>{{ $preview }}
+                        </p>
                     </a>
                 @empty
                     <div style="text-align:center; padding:40px 0; color:#b0b7c3; font-size:0.85rem;">
@@ -82,16 +89,14 @@
             @if($selectedReport)
                 <h1 class="page-title" style="font-size:1rem; font-family:'DM Mono',monospace;">
                     Chat: {{ $selectedReport->case_id }}
-                    {{-- Live indicator --}}
                     <span id="liveIndicator" style="font-size:0.7rem; font-family:sans-serif; font-weight:400;
-                          color:#22c55e; margin-left:8px; opacity:0;">
+                          color:#22c55e; margin-left:8px; opacity:0; transition:opacity 0.4s;">
                         <span style="display:inline-block; width:7px; height:7px; border-radius:50%;
                                      background:#22c55e; margin-right:3px; vertical-align:middle;"></span>Live
                     </span>
                 </h1>
 
                 <div class="chat-display" id="chatWindow">
-                    {{-- Initial report as first bubble --}}
                     <div class="chat-bubble student-msg">
                         <div class="bubble-text">
                             <small><b>Your Initial Report</b></small><br>
@@ -99,7 +104,6 @@
                         </div>
                     </div>
 
-                    {{-- Existing messages rendered server-side on page load --}}
                     @php $lastMessageId = 0; @endphp
                     @foreach($selectedReport->messages as $msg)
                         @php
@@ -115,7 +119,6 @@
                     @endforeach
                 </div>
 
-                {{-- Chat input --}}
                 <div class="chat-input-container">
                     <input type="hidden" id="reportId" value="{{ $selectedReport->report_id }}">
                     <div class="input-wrapper">
@@ -126,7 +129,6 @@
                                   style="resize:none; overflow:hidden;"></textarea>
                         <button id="sendBtn" class="send-btn" onclick="sendMessage()">Send</button>
                     </div>
-                    {{-- Sending indicator --}}
                     <div id="sendingIndicator" style="font-size:0.75rem; color:#94a3b8; padding:2px 4px; display:none;">
                         <i class="fas fa-circle-notch fa-spin"></i> Sending...
                     </div>
@@ -147,35 +149,30 @@
 
     <script>
     // ─── CONFIG ───────────────────────────────────────────────────────────────
-    const REPORT_ID    = {{ $selectedReport ? $selectedReport->report_id : 'null' }};
-    const CURRENT_USER = {{ auth()->id() }};
-    const POLL_URL     = "{{ route('messages.poll', ['reportId' => $selectedReport ? $selectedReport->report_id : 0]) }}";
-    const SEND_URL     = "{{ route('messages.send') }}";
-    const CSRF         = document.querySelector('meta[name="csrf-token"]').content;
+    const REPORT_ID      = {{ $selectedReport ? $selectedReport->report_id : 'null' }};
+    const CURRENT_USER   = {{ auth()->id() }};
+    const POLL_URL       = "{{ route('messages.poll', ['reportId' => $selectedReport ? $selectedReport->report_id : 0]) }}";
+    const SIDEBAR_URL    = "{{ route('messages.sidebar-poll') }}";
+    const SEND_URL       = "{{ route('messages.send') }}";
+    const CSRF           = document.querySelector('meta[name="csrf-token"]').content;
 
-    // Track the highest message_id we've rendered so polling only fetches new ones
-    let lastMessageId = {{ $lastMessageId ?? 0 }};
-    let pollTimer     = null;
-    let isSending     = false;
+    let lastMessageId    = {{ $lastMessageId ?? 0 }};
+    let pollTimer        = null;
+    let sidebarTimer     = null;
+    let isSending        = false;
 
-    // ─── SCROLL HELPER ────────────────────────────────────────────────────────
+    // ─── SCROLL ───────────────────────────────────────────────────────────────
     function scrollToBottom() {
         const win = document.getElementById('chatWindow');
         if (win) win.scrollTop = win.scrollHeight;
     }
 
-    // ─── BUILD A CHAT BUBBLE ──────────────────────────────────────────────────
+    // ─── BUILD BUBBLE ─────────────────────────────────────────────────────────
     function buildBubble(text, isMine, time) {
         const div = document.createElement('div');
         div.className = 'chat-bubble ' + (isMine ? 'student-msg' : 'guidance-msg');
-
-        // Convert newlines to <br> (same as nl2br in blade)
         const escaped = text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/\n/g, '<br>');
-
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
         div.innerHTML = `<div class="bubble-text">${escaped}<small>${time}</small></div>`;
         return div;
     }
@@ -183,7 +180,6 @@
     // ─── SEND MESSAGE ─────────────────────────────────────────────────────────
     async function sendMessage() {
         if (!REPORT_ID || isSending) return;
-
         const input = document.getElementById('messageInput');
         const text  = input.value.trim();
         if (!text) return;
@@ -194,33 +190,24 @@
 
         try {
             const res  = await fetch(SEND_URL, {
-                method:  'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': CSRF,
-                    'Accept':       'application/json',
-                },
-                body: JSON.stringify({
-                    report_id:    REPORT_ID,
-                    message_text: text,
-                }),
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+                body: JSON.stringify({ report_id: REPORT_ID, message_text: text }),
             });
-
             const data = await res.json();
 
             if (data.success) {
-                // Render the bubble immediately (don't wait for poll)
-                const bubble = buildBubble(data.text, true, data.time);
-                document.getElementById('chatWindow').appendChild(bubble);
+                document.getElementById('chatWindow').appendChild(buildBubble(data.text, true, data.time));
                 lastMessageId = Math.max(lastMessageId, data.message_id);
                 input.value = '';
                 input.style.height = 'auto';
                 scrollToBottom();
+                // Update this conversation's preview immediately in the sidebar
+                updateSidebarItem(REPORT_ID, 'You: ' + data.text, 'Just now', 0, Date.now() / 1000);
             } else {
                 alert('Failed to send message. Please try again.');
             }
         } catch (err) {
-            console.error('Send error:', err);
             alert('Network error. Please check your connection.');
         } finally {
             isSending = false;
@@ -229,57 +216,98 @@
         }
     }
 
-    // ─── POLL FOR NEW MESSAGES ────────────────────────────────────────────────
+    // ─── POLL CHAT WINDOW (new messages in open conversation) ─────────────────
     async function pollMessages() {
         if (!REPORT_ID) return;
-
         try {
             const res  = await fetch(`${POLL_URL}?after=${lastMessageId}`, {
-                headers: {
-                    'Accept':       'application/json',
-                    'X-CSRF-TOKEN': CSRF,
-                },
+                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF },
             });
-
             const data = await res.json();
 
             if (data.messages && data.messages.length > 0) {
                 const win = document.getElementById('chatWindow');
                 data.messages.forEach(msg => {
-                    // Skip messages we sent ourselves (already rendered via sendMessage())
-                    if (msg.user_id === CURRENT_USER) {
-                        lastMessageId = Math.max(lastMessageId, msg.message_id);
-                        return;
-                    }
-                    const bubble = buildBubble(msg.text, msg.is_mine, msg.time);
-                    win.appendChild(bubble);
+                    if (msg.user_id === CURRENT_USER) { lastMessageId = Math.max(lastMessageId, msg.message_id); return; }
+                    win.appendChild(buildBubble(msg.text, false, msg.time));
                     lastMessageId = Math.max(lastMessageId, msg.message_id);
                 });
                 scrollToBottom();
             }
-
-            // Update nav unread badge (guidance replies mark themselves as read on poll)
             updateNavBadge(data.unread_count ?? 0);
-
-            // Show live indicator
             showLive();
+        } catch (err) { console.warn('Poll error:', err); }
+    }
 
-        } catch (err) {
-            // Silently fail — will retry on next tick
-            console.warn('Poll error:', err);
+    // ─── POLL SIDEBAR (all conversations — unread dots, previews, ordering) ───
+    async function pollSidebar() {
+        try {
+            const res  = await fetch(SIDEBAR_URL, {
+                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF },
+            });
+            const data = await res.json();
+
+            if (!data.conversations) return;
+
+            Object.entries(data.conversations).forEach(([reportId, conv]) => {
+                const label = conv.latest_sender ? conv.latest_sender + ': ' : '';
+                updateSidebarItem(reportId, conv.latest_text ? label + conv.latest_text : null,
+                    conv.latest_time, conv.unread, conv.last_activity);
+            });
+
+            // Re-sort: conversations with latest activity bubble to top
+            sortSidebar();
+
+            // Update nav badge from sidebar poll total
+            updateNavBadge(data.total_unread ?? 0);
+
+        } catch (err) { console.warn('Sidebar poll error:', err); }
+    }
+
+    // ─── UPDATE ONE SIDEBAR ITEM ──────────────────────────────────────────────
+    function updateSidebarItem(reportId, previewText, timeText, unreadCount, lastActivity) {
+        const item     = document.getElementById('conv-' + reportId);
+        const dotEl    = document.getElementById('dot-' + reportId);
+        const titleEl  = document.getElementById('conv-title-' + reportId);
+        const previewEl = document.getElementById('conv-preview-' + reportId);
+        const timeEl   = document.getElementById('conv-time-' + reportId);
+
+        if (!item) return;
+
+        // Update last-activity timestamp for sorting
+        if (lastActivity) item.dataset.lastActivity = lastActivity;
+
+        // Unread dot + bold title
+        const isActive = (parseInt(reportId) === REPORT_ID); // currently open — no dot needed
+        if (dotEl) dotEl.style.display = (!isActive && unreadCount > 0) ? '' : 'none';
+        if (titleEl) titleEl.style.fontWeight = (!isActive && unreadCount > 0) ? '700' : '';
+
+        // Preview text
+        if (previewEl && previewText) {
+            const limit = 38;
+            const trimmed = previewText.length > limit ? previewText.substring(0, limit) + '…' : previewText;
+            previewEl.textContent = trimmed;
         }
+
+        // Time label
+        if (timeEl && timeText) timeEl.textContent = timeText;
+    }
+
+    // ─── SORT SIDEBAR BY LAST ACTIVITY ───────────────────────────────────────
+    function sortSidebar() {
+        const list  = document.getElementById('conversationList');
+        if (!list) return;
+        const items = Array.from(list.querySelectorAll('.report-item'));
+        items.sort((a, b) => parseFloat(b.dataset.lastActivity || 0) - parseFloat(a.dataset.lastActivity || 0));
+        items.forEach(item => list.appendChild(item)); // re-insert in sorted order
     }
 
     // ─── NAV BADGE ────────────────────────────────────────────────────────────
     function updateNavBadge(count) {
         const badge = document.getElementById('navUnreadBadge');
         if (!badge) return;
-        if (count > 0) {
-            badge.textContent = count;
-            badge.style.display = '';
-        } else {
-            badge.style.display = 'none';
-        }
+        if (count > 0) { badge.textContent = count; badge.style.display = ''; }
+        else badge.style.display = 'none';
     }
 
     // ─── LIVE INDICATOR ──────────────────────────────────────────────────────
@@ -292,43 +320,39 @@
         liveTimer = setTimeout(() => el.style.opacity = '0', 3000);
     }
 
-    // ─── SEND ON ENTER (Shift+Enter = newline) ────────────────────────────────
+    // ─── INIT ─────────────────────────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', function () {
         const input = document.getElementById('messageInput');
-        if (!input) return;
+        if (input) {
+            input.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+            });
+            input.addEventListener('input', function () {
+                this.style.height = 'auto';
+                const max = 120;
+                this.style.height = Math.min(this.scrollHeight, max) + 'px';
+                this.style.overflowY = this.scrollHeight > max ? 'auto' : 'hidden';
+            });
+        }
 
-        input.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
-        });
-
-        // Auto-resize textarea
-        input.addEventListener('input', function () {
-            this.style.height = 'auto';
-            const maxHeight = 120;
-            if (this.scrollHeight <= maxHeight) {
-                this.style.height = this.scrollHeight + 'px';
-                this.style.overflowY = 'hidden';
-            } else {
-                this.style.height = maxHeight + 'px';
-                this.style.overflowY = 'auto';
-            }
-        });
-
-        // Initial scroll to bottom
         scrollToBottom();
+        sortSidebar(); // initial sort on page load
 
-        // Start polling every 3 seconds if a report is open
+        // Chat window polling (only when a conversation is open)
         if (REPORT_ID) {
-            pollMessages(); // immediate first check
+            pollMessages();
             pollTimer = setInterval(pollMessages, 3000);
         }
+
+        // Sidebar polling — always runs so unread dots update even without open chat
+        pollSidebar();
+        sidebarTimer = setInterval(pollSidebar, 3000);
     });
 
-    // Stop polling when user leaves the page (avoid orphan intervals)
-    window.addEventListener('beforeunload', () => clearInterval(pollTimer));
+    window.addEventListener('beforeunload', () => {
+        clearInterval(pollTimer);
+        clearInterval(sidebarTimer);
+    });
     </script>
 </body>
 </html>

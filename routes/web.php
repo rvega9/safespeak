@@ -68,6 +68,9 @@ Route::middleware(['auth'])->group(function () {
 
     // Mark messages as read (JSON)
     Route::post('/messages/read/{reportId}', [StudentController::class, 'markAsRead'])->name('messages.read');
+
+    // Sidebar poll — returns latest message preview + unread count for ALL conversations (JSON)
+    Route::get('/messages/sidebar-poll', [StudentController::class, 'sidebarPoll'])->name('messages.sidebar-poll');
     // ─────────────────────────────────────────────────────────────────────────
 
     // GUIDANCE ROUTES

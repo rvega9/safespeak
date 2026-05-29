@@ -100,30 +100,38 @@
             @endif
 
             {{-- Report List --}}
-            <div class="report-list">
+            <div class="report-list" id="conversationList">
                 @forelse($reports as $report)
                     @php
-                        $unreadCount = $report->messages
-                            ->where('is_read', false)
-                            ->where('user_id', '!=', auth()->id())
-                            ->count();
+                        $latestMsg    = $report->messages->last();
+                        $unreadCount  = $report->messages->where('is_read', false)->where('user_id', '!=', auth()->id())->count();
+                        $preview      = $latestMsg ? Str::limit($latestMsg->message_text, 25) : Str::limit($report->description, 25);
+                        $previewLabel = $latestMsg ? ($latestMsg->user_id == auth()->id() ? 'You: ' : 'Student: ') : '';
+                        $lastActivity = $latestMsg ? $latestMsg->created_at->timestamp : $report->created_at->timestamp;
                     @endphp
                     <a href="{{ route('guidance.dashboard', array_merge(request()->query(), ['report' => $report->report_id])) }}"
                        class="report-item {{ $selectedReport && $selectedReport->report_id == $report->report_id ? 'active' : '' }}"
-                       data-report-id="{{ $report->report_id }}">
+                       id="conv-{{ $report->report_id }}"
+                       data-report-id="{{ $report->report_id }}"
+                       data-last-activity="{{ $lastActivity }}">
                         <div class="report-meta">
-                            <strong>
+                            <strong id="conv-title-{{ $report->report_id }}"
+                                    style="{{ $unreadCount > 0 ? 'font-weight:700;' : '' }}">
                                 {{ $report->case_id }}
-                                {{-- Unread badge: toggled in real-time by JS --}}
                                 <span class="unread-badge" id="badge-{{ $report->report_id }}"
                                       style="{{ $unreadCount > 0 ? '' : 'display:none;' }}">
-                                    {{ $unreadCount }}
+                                    {{ $unreadCount ?: '' }}
                                 </span>
                             </strong>
-                            <span>{{ $report->created_at->diffForHumans() }}</span>
+                            <span id="conv-time-{{ $report->report_id }}"
+                                  style="font-size:0.75rem; color:#94a3b8;">
+                                {{ $latestMsg ? $latestMsg->created_at->diffForHumans() : $report->created_at->diffForHumans() }}
+                            </span>
                         </div>
                         <div class="report-item-content">
-                            <p class="summary-preview">{{ Str::limit($report->description, 25) }}</p>
+                            <p class="summary-preview" id="conv-preview-{{ $report->report_id }}">
+                                <span style="color:#94a3b8; font-size:0.8rem;">{{ $previewLabel }}</span>{{ $preview }}
+                            </p>
                             @if($section === 'archived')
                                 <span class="archived-label"><i class="fas fa-archive"></i> Archived</span>
                             @else
@@ -417,31 +425,28 @@
     const REPORT_ID    = {{ $selectedReport ? $selectedReport->report_id : 'null' }};
     const CURRENT_USER = {{ auth()->id() }};
     const POLL_URL     = "{{ route('messages.poll', ['reportId' => $selectedReport ? $selectedReport->report_id : 0]) }}";
+    const SIDEBAR_URL  = "{{ route('messages.sidebar-poll') }}";
     const SEND_URL     = "{{ route('messages.send') }}";
     const CSRF         = document.querySelector('meta[name="csrf-token"]').content;
 
     let lastMessageId = {{ $lastMessageId ?? 0 }};
     let pollTimer     = null;
+    let sidebarTimer  = null;
     let isSending     = false;
 
-    // ─── SCROLL HELPER ────────────────────────────────────────────────────────
+    // ─── SCROLL ───────────────────────────────────────────────────────────────
     function scrollToBottom() {
         const win = document.getElementById('chatWindow');
         if (win) win.scrollTop = win.scrollHeight;
     }
 
-    // ─── BUILD A CHAT BUBBLE ──────────────────────────────────────────────────
+    // ─── BUILD BUBBLE ─────────────────────────────────────────────────────────
     function buildBubble(text, isMine, time, sender) {
         const div = document.createElement('div');
         div.className = 'chat-bubble ' + (isMine ? 'guidance-msg' : 'student-msg');
         if (sender) div.setAttribute('data-sender', sender);
-
         const escaped = text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/\n/g, '<br>');
-
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
         div.innerHTML = `<div class="bubble-text">${escaped}<small>${time}</small></div>`;
         return div;
     }
@@ -449,7 +454,6 @@
     // ─── SEND MESSAGE ─────────────────────────────────────────────────────────
     async function sendMessage() {
         if (!REPORT_ID || isSending) return;
-
         const input = document.getElementById('messageInput');
         const text  = input.value.trim();
         if (!text) return;
@@ -460,32 +464,25 @@
 
         try {
             const res  = await fetch(SEND_URL, {
-                method:  'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': CSRF,
-                    'Accept':       'application/json',
-                },
-                body: JSON.stringify({
-                    report_id:    REPORT_ID,
-                    message_text: text,
-                }),
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+                body: JSON.stringify({ report_id: REPORT_ID, message_text: text }),
             });
-
             const data = await res.json();
 
             if (data.success) {
-                const bubble = buildBubble(data.text, true, data.time, 'You');
-                document.getElementById('chatWindow').appendChild(bubble);
+                document.getElementById('chatWindow').appendChild(buildBubble(data.text, true, data.time, 'You'));
                 lastMessageId = Math.max(lastMessageId, data.message_id);
                 input.value = '';
                 input.style.height = 'auto';
                 scrollToBottom();
+                // Immediately update this conversation's sidebar preview
+                updateSidebarItem(REPORT_ID, 'You: ' + data.text, 'Just now', 0, Date.now() / 1000);
+                sortSidebar();
             } else {
                 alert('Failed to send message. Please try again.');
             }
         } catch (err) {
-            console.error('Send error:', err);
             alert('Network error. Please check your connection.');
         } finally {
             isSending = false;
@@ -494,44 +491,90 @@
         }
     }
 
-    // ─── POLL FOR NEW MESSAGES (student replies) ──────────────────────────────
+    // ─── POLL CHAT WINDOW ─────────────────────────────────────────────────────
     async function pollMessages() {
         if (!REPORT_ID) return;
-
         try {
             const res  = await fetch(`${POLL_URL}?after=${lastMessageId}`, {
-                headers: {
-                    'Accept':       'application/json',
-                    'X-CSRF-TOKEN': CSRF,
-                },
+                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF },
             });
-
             const data = await res.json();
 
             if (data.messages && data.messages.length > 0) {
                 const win = document.getElementById('chatWindow');
                 data.messages.forEach(msg => {
-                    // Skip own messages already rendered via sendMessage()
-                    if (msg.user_id === CURRENT_USER) {
-                        lastMessageId = Math.max(lastMessageId, msg.message_id);
-                        return;
-                    }
-                    const bubble = buildBubble(msg.text, false, msg.time, 'Student');
-                    win.appendChild(bubble);
+                    if (msg.user_id === CURRENT_USER) { lastMessageId = Math.max(lastMessageId, msg.message_id); return; }
+                    win.appendChild(buildBubble(msg.text, false, msg.time, 'Student'));
                     lastMessageId = Math.max(lastMessageId, msg.message_id);
-
-                    // Clear unread badge for this report in the left sidebar
-                    const badge = document.getElementById('badge-' + REPORT_ID);
-                    if (badge) badge.style.display = 'none';
                 });
                 scrollToBottom();
             }
-
             showLive();
+        } catch (err) { console.warn('Poll error:', err); }
+    }
 
-        } catch (err) {
-            console.warn('Poll error:', err);
+    // ─── POLL SIDEBAR (all conversations) ────────────────────────────────────
+    async function pollSidebar() {
+        try {
+            const res  = await fetch(SIDEBAR_URL, {
+                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF },
+            });
+            const data = await res.json();
+            if (!data.conversations) return;
+
+            Object.entries(data.conversations).forEach(([reportId, conv]) => {
+                const label = conv.latest_sender ? conv.latest_sender + ': ' : '';
+                updateSidebarItem(reportId, conv.latest_text ? label + conv.latest_text : null,
+                    conv.latest_time, conv.unread, conv.last_activity);
+            });
+
+            sortSidebar();
+        } catch (err) { console.warn('Sidebar poll error:', err); }
+    }
+
+    // ─── UPDATE ONE SIDEBAR ITEM ──────────────────────────────────────────────
+    function updateSidebarItem(reportId, previewText, timeText, unreadCount, lastActivity) {
+        const item      = document.getElementById('conv-' + reportId);
+        const badgeEl   = document.getElementById('badge-' + reportId);
+        const titleEl   = document.getElementById('conv-title-' + reportId);
+        const previewEl = document.getElementById('conv-preview-' + reportId);
+        const timeEl    = document.getElementById('conv-time-' + reportId);
+        if (!item) return;
+
+        if (lastActivity) item.dataset.lastActivity = lastActivity;
+
+        const isActive = (parseInt(reportId) === REPORT_ID);
+
+        // Unread badge — suppress for the currently open conversation
+        if (badgeEl) {
+            if (!isActive && unreadCount > 0) {
+                badgeEl.textContent = unreadCount;
+                badgeEl.style.display = '';
+            } else {
+                badgeEl.style.display = 'none';
+            }
         }
+
+        // Bold title when unread
+        if (titleEl) titleEl.style.fontWeight = (!isActive && unreadCount > 0) ? '700' : '';
+
+        // Preview text
+        if (previewEl && previewText) {
+            const limit   = 25;
+            const trimmed = previewText.length > limit ? previewText.substring(0, limit) + '…' : previewText;
+            previewEl.textContent = trimmed;
+        }
+
+        if (timeEl && timeText) timeEl.textContent = timeText;
+    }
+
+    // ─── SORT SIDEBAR ─────────────────────────────────────────────────────────
+    function sortSidebar() {
+        const list  = document.getElementById('conversationList');
+        if (!list) return;
+        const items = Array.from(list.querySelectorAll('.report-item'));
+        items.sort((a, b) => parseFloat(b.dataset.lastActivity || 0) - parseFloat(a.dataset.lastActivity || 0));
+        items.forEach(item => list.appendChild(item));
     }
 
     // ─── LIVE INDICATOR ──────────────────────────────────────────────────────
@@ -544,41 +587,34 @@
         liveTimer = setTimeout(() => el.style.opacity = '0', 3000);
     }
 
-    // ─── SEND ON ENTER ────────────────────────────────────────────────────────
+    // ─── INIT ─────────────────────────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', function () {
         const input = document.getElementById('messageInput');
         if (input) {
             input.addEventListener('keydown', function (e) {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                }
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
             });
-
-            // Auto-resize textarea
             input.addEventListener('input', function () {
                 this.style.height = 'auto';
-                const maxHeight = 120;
-                if (this.scrollHeight <= maxHeight) {
-                    this.style.height = this.scrollHeight + 'px';
-                    this.style.overflowY = 'hidden';
-                } else {
-                    this.style.height = maxHeight + 'px';
-                    this.style.overflowY = 'auto';
-                }
+                const max = 120;
+                this.style.height = Math.min(this.scrollHeight, max) + 'px';
+                this.style.overflowY = this.scrollHeight > max ? 'auto' : 'hidden';
             });
         }
 
         scrollToBottom();
+        sortSidebar();
 
-        // Start polling
         if (REPORT_ID) {
             pollMessages();
             pollTimer = setInterval(pollMessages, 3000);
         }
+
+        pollSidebar();
+        sidebarTimer = setInterval(pollSidebar, 3000);
     });
 
-    window.addEventListener('beforeunload', () => clearInterval(pollTimer));
+    window.addEventListener('beforeunload', () => { clearInterval(pollTimer); clearInterval(sidebarTimer); });
 
     // ─── EXISTING GUIDANCE JS (archive modal, settings panel) ────────────────
     function showArchiveConfirm(caseId, reportId) {

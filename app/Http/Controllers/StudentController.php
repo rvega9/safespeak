@@ -203,6 +203,57 @@ class StudentController extends Controller
         return response()->json(['success' => true]);
     }
 
+    /**
+     * Sidebar poll — returns latest message preview, unread count, and last
+     * activity timestamp for every conversation visible to the logged-in user.
+     * Called every 3 seconds to keep the sidebar live without a page reload.
+     */
+    public function sidebarPoll(Request $request)
+    {
+        $user = auth()->user();
+
+        // Fetch the reports this user can see
+        if ($user->role === 'student') {
+            $reports = Report::where('user_id', $user->id)
+                ->with(['messages' => function ($q) {
+                    $q->orderBy('created_at', 'desc');
+                }])
+                ->get();
+        } else {
+            // Guidance/admin can see all non-archived reports
+            $reports = Report::where('is_archived', false)
+                ->with(['messages' => function ($q) {
+                    $q->orderBy('created_at', 'desc');
+                }])
+                ->get();
+        }
+
+        $conversations = $reports->map(function ($report) use ($user) {
+            $latest  = $report->messages->first(); // already desc sorted
+            $unread  = $report->messages
+                ->where('is_read', false)
+                ->where('user_id', '!=', $user->id)
+                ->count();
+
+            return [
+                'report_id'      => $report->report_id,
+                'unread'         => $unread,
+                'latest_text'    => $latest ? $report->messages->first()->message_text : null,
+                'latest_sender'  => $latest ? ($latest->user_id === $user->id ? 'You' : ($user->role === 'guidance' ? 'Student' : 'Guidance')) : null,
+                'latest_time'    => $latest ? $latest->created_at->diffForHumans() : null,
+                'last_activity'  => $latest ? $latest->created_at->timestamp : $report->created_at->timestamp,
+            ];
+        });
+
+        // Total unread for nav badge
+        $totalUnread = $conversations->sum('unread');
+
+        return response()->json([
+            'conversations' => $conversations->keyBy('report_id'),
+            'total_unread'  => $totalUnread,
+        ]);
+    }
+
     public function withdrawReport($id)
     {
         $report = Report::where('report_id', $id)->firstOrFail();
