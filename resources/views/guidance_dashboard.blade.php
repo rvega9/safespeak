@@ -523,10 +523,11 @@
             const data = await res.json();
             if (!data.conversations) return;
 
-            Object.entries(data.conversations).forEach(([reportId, conv]) => {
-                const label = conv.latest_sender ? conv.latest_sender + ': ' : '';
-                updateSidebarItem(reportId, conv.latest_text ? label + conv.latest_text : null,
-                    conv.latest_time, conv.unread, conv.last_activity);
+            Object.values(data.conversations).forEach(conv => {
+                const label       = conv.latest_sender ? conv.latest_sender + ': ' : '';
+                const previewText = conv.latest_text   ? label + conv.latest_text : null;
+                updateSidebarItem(conv.report_id, previewText, conv.latest_time,
+                                  conv.unread, conv.last_activity);
             });
 
             sortSidebar();
@@ -542,6 +543,7 @@
         const timeEl    = document.getElementById('conv-time-' + reportId);
         if (!item) return;
 
+        // Always update last-activity for sorting
         if (lastActivity) item.dataset.lastActivity = lastActivity;
 
         const isActive  = (parseInt(reportId) === REPORT_ID);
@@ -550,32 +552,33 @@
         // Numbered unread badge
         if (badgeEl) {
             if (hasUnread) {
-                badgeEl.textContent = unreadCount;
+                badgeEl.textContent   = unreadCount;
                 badgeEl.style.display = '';
             } else {
                 badgeEl.style.display = 'none';
             }
         }
 
-        // Bold BOTH case ID title and preview text when there are unread messages
-        if (titleEl) titleEl.style.fontWeight = hasUnread ? '700' : '';
-        if (previewEl) previewEl.style.fontWeight = hasUnread ? '700' : '';
+        // Bold case ID + preview when unread
+        if (titleEl)   titleEl.style.fontWeight   = hasUnread ? '700' : '400';
+        if (previewEl) previewEl.style.fontWeight = hasUnread ? '700' : '400';
 
-        // Preview text — always update when we have new text
-        if (previewEl && previewText !== null && previewText !== undefined) {
+        // Always overwrite preview with whatever server says is latest
+        if (previewEl && previewText) {
             const limit   = 25;
             const trimmed = previewText.length > limit ? previewText.substring(0, limit) + '…' : previewText;
             previewEl.textContent = trimmed;
         }
 
+        // Always update time label
         if (timeEl && timeText) timeEl.textContent = timeText;
     }
 
-    // ─── SORT SIDEBAR ─────────────────────────────────────────────────────────
+    // ─── SORT SIDEBAR BY LAST ACTIVITY (highest = most recent = top) ─────────
     function sortSidebar() {
-        const list  = document.getElementById('conversationList');
+        const list = document.getElementById('conversationList');
         if (!list) return;
-        const items = Array.from(list.querySelectorAll('.report-item'));
+        const items = Array.from(list.querySelectorAll('a.report-item'));
         items.sort((a, b) => parseFloat(b.dataset.lastActivity || 0) - parseFloat(a.dataset.lastActivity || 0));
         items.forEach(item => list.appendChild(item));
     }

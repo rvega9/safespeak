@@ -207,43 +207,67 @@ class StudentController extends Controller
      * Sidebar poll — returns latest message preview, unread count, and last
      * activity timestamp for every conversation visible to the logged-in user.
      * Called every 3 seconds to keep the sidebar live without a page reload.
+     *
+     * NOTE: We deliberately avoid using the Report::messages() eager-load for
+     * the "latest message" lookup because that relationship has orderBy('asc')
+     * baked in. Instead we query the messages table directly per report so we
+     * are guaranteed to get the true latest message regardless of relationship
+     * ordering. This is the only reliable fix.
      */
     public function sidebarPoll(Request $request)
     {
         $user = auth()->user();
 
-        // Fetch reports this user can see.
-        // We load messages ordered DESC so ->first() on the collection = the true latest message.
-        // We do NOT rely on the Report::messages() relationship default order (which is ASC)
-        // because Eloquent eager-load respects the closure's orderBy, not the relationship's.
+        // 1. Get the report IDs this user is allowed to see
         if ($user->role === 'student') {
-            $reports = Report::where('user_id', $user->id)
-                ->with(['messages' => function ($q) {
-                    $q->orderBy('created_at', 'desc')->orderBy('message_id', 'desc');
-                }])
-                ->get();
+            $reportIds = Report::where('user_id', $user->id)->pluck('report_id');
         } else {
-            $reports = Report::where('is_archived', false)
-                ->with(['messages' => function ($q) {
-                    $q->orderBy('created_at', 'desc')->orderBy('message_id', 'desc');
-                }])
-                ->get();
+            // Guidance sees all non-archived reports
+            $reportIds = Report::where('is_archived', false)->pluck('report_id');
         }
 
-        $conversations = $reports->map(function ($report) use ($user) {
-            // ->first() is the latest because we loaded DESC
-            $latest = $report->messages->first();
+        if ($reportIds->isEmpty()) {
+            return response()->json(['conversations' => [], 'total_unread' => 0]);
+        }
 
-            // Count messages sent by the OTHER party that are unread
-            $unread = $report->messages
-                ->where('is_read', false)
-                ->where('user_id', '!=', $user->id)
-                ->count();
+        // 2. For each report, get the single latest message via a subquery
+        //    (one DB round-trip using a self-join on max message_id per report)
+        $latestMessages = \DB::table('messages as m1')
+            ->join(\DB::raw('(SELECT report_id, MAX(message_id) as max_id FROM messages GROUP BY report_id) as m2'),
+                function ($join) {
+                    $join->on('m1.report_id', '=', 'm2.report_id')
+                         ->on('m1.message_id', '=', 'm2.max_id');
+                })
+            ->whereIn('m1.report_id', $reportIds)
+            ->select('m1.report_id', 'm1.message_id', 'm1.user_id', 'm1.message_text', 'm1.created_at')
+            ->get()
+            ->keyBy('report_id'); // index by report_id for O(1) lookup
 
-            // Label shown before the preview text, e.g. "You: " or "Student: " or "Guidance: "
+        // 3. Count unread messages per report (sent by the other party)
+        $unreadCounts = \DB::table('messages')
+            ->whereIn('report_id', $reportIds)
+            ->where('user_id', '!=', $user->id)
+            ->where('is_read', false)
+            ->select('report_id', \DB::raw('COUNT(*) as unread'))
+            ->groupBy('report_id')
+            ->get()
+            ->keyBy('report_id');
+
+        // 4. Also get the reports themselves for fallback timestamps
+        $reports = Report::whereIn('report_id', $reportIds)
+            ->select('report_id', 'created_at')
+            ->get()
+            ->keyBy('report_id');
+
+        // 5. Build the response array
+        $conversations = $reportIds->map(function ($reportId) use ($user, $latestMessages, $unreadCounts, $reports) {
+            $latest = $latestMessages->get($reportId);
+            $unread = $unreadCounts->get($reportId)?->unread ?? 0;
+
+            // Sender label
             $senderLabel = null;
             if ($latest) {
-                if ($latest->user_id === $user->id) {
+                if ((int)$latest->user_id === $user->id) {
                     $senderLabel = 'You';
                 } elseif ($user->role === 'guidance') {
                     $senderLabel = 'Student';
@@ -252,21 +276,25 @@ class StudentController extends Controller
                 }
             }
 
+            $lastActivity = $latest
+                ? \Carbon\Carbon::parse($latest->created_at)->timestamp
+                : ($reports->get($reportId)?->created_at?->timestamp ?? 0);
+
             return [
-                'report_id'     => $report->report_id,
-                'unread'        => $unread,
-                'latest_text'   => $latest ? $latest->message_text : null,
+                'report_id'     => $reportId,
+                'unread'        => (int) $unread,
+                'latest_text'   => $latest?->message_text ?? null,
                 'latest_sender' => $senderLabel,
-                'latest_time'   => $latest ? $latest->created_at->diffForHumans() : null,
-                'last_activity' => $latest ? $latest->created_at->timestamp : $report->created_at->timestamp,
+                'latest_time'   => $latest
+                    ? \Carbon\Carbon::parse($latest->created_at)->diffForHumans()
+                    : null,
+                'last_activity' => $lastActivity,
             ];
         });
 
-        $totalUnread = $conversations->sum('unread');
-
         return response()->json([
             'conversations' => $conversations->keyBy('report_id'),
-            'total_unread'  => $totalUnread,
+            'total_unread'  => $conversations->sum('unread'),
         ]);
     }
 

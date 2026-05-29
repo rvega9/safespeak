@@ -243,73 +243,75 @@
         } catch (err) { console.warn('Poll error:', err); }
     }
 
-    // ─── POLL SIDEBAR (all conversations — unread dots, previews, ordering) ───
+    // ─── POLL SIDEBAR (all conversations — previews, unread badges, ordering) ─
     async function pollSidebar() {
         try {
             const res  = await fetch(SIDEBAR_URL, {
                 headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF },
             });
             const data = await res.json();
-
             if (!data.conversations) return;
 
-            Object.entries(data.conversations).forEach(([reportId, conv]) => {
-                const label = conv.latest_sender ? conv.latest_sender + ': ' : '';
-                updateSidebarItem(reportId, conv.latest_text ? label + conv.latest_text : null,
-                    conv.latest_time, conv.unread, conv.last_activity);
+            Object.values(data.conversations).forEach(conv => {
+                const label       = conv.latest_sender ? conv.latest_sender + ': ' : '';
+                const previewText = conv.latest_text   ? label + conv.latest_text : null;
+                updateSidebarItem(conv.report_id, previewText, conv.latest_time,
+                                  conv.unread, conv.last_activity);
             });
 
-            // Re-sort: conversations with latest activity bubble to top
             sortSidebar();
-
-            // Update nav badge from sidebar poll total
             updateNavBadge(data.total_unread ?? 0);
 
         } catch (err) { console.warn('Sidebar poll error:', err); }
     }
 
     // ─── UPDATE ONE SIDEBAR ITEM ──────────────────────────────────────────────
-    // previewText: full string already including "You: " / "Guidance: " prefix
-    // unreadCount: number of unread messages from the other party
-    // lastActivity: unix timestamp (for sorting)
     function updateSidebarItem(reportId, previewText, timeText, unreadCount, lastActivity) {
         const item      = document.getElementById('conv-' + reportId);
-        const dotEl     = document.getElementById('dot-' + reportId);
+        const badgeEl   = document.getElementById('dot-' + reportId);   // reusing dot id for badge
         const titleEl   = document.getElementById('conv-title-' + reportId);
         const previewEl = document.getElementById('conv-preview-' + reportId);
         const timeEl    = document.getElementById('conv-time-' + reportId);
-
         if (!item) return;
 
+        // Always update last-activity for sorting
         if (lastActivity) item.dataset.lastActivity = lastActivity;
 
-        const isActive = (parseInt(reportId) === REPORT_ID);
+        const isActive  = (parseInt(reportId) === REPORT_ID);
         const hasUnread = (!isActive && unreadCount > 0);
 
-        // Unread dot (student view uses dot, not numbered badge)
-        if (dotEl) dotEl.style.display = hasUnread ? '' : 'none';
+        // Numbered unread badge
+        if (badgeEl) {
+            if (hasUnread) {
+                badgeEl.textContent    = unreadCount;
+                badgeEl.style.display  = '';
+            } else {
+                badgeEl.style.display  = 'none';
+            }
+        }
 
-        // Bold BOTH the case ID title and the preview text when there are unread messages
-        if (titleEl) titleEl.style.fontWeight = hasUnread ? '700' : '';
-        if (previewEl) previewEl.style.fontWeight = hasUnread ? '700' : '';
+        // Bold case ID + preview when unread
+        if (titleEl)   titleEl.style.fontWeight   = hasUnread ? '700' : '400';
+        if (previewEl) previewEl.style.fontWeight = hasUnread ? '700' : '400';
 
-        // Preview text — always update when we have new text
-        if (previewEl && previewText !== null && previewText !== undefined) {
+        // Always overwrite preview text with whatever the server says is latest
+        if (previewEl && previewText) {
             const limit   = 38;
             const trimmed = previewText.length > limit ? previewText.substring(0, limit) + '…' : previewText;
             previewEl.textContent = trimmed;
         }
 
+        // Always update time label
         if (timeEl && timeText) timeEl.textContent = timeText;
     }
 
-    // ─── SORT SIDEBAR BY LAST ACTIVITY ───────────────────────────────────────
+    // ─── SORT SIDEBAR BY LAST ACTIVITY (highest = most recent = top) ─────────
     function sortSidebar() {
-        const list  = document.getElementById('conversationList');
+        const list = document.getElementById('conversationList');
         if (!list) return;
-        const items = Array.from(list.querySelectorAll('.report-item'));
+        const items = Array.from(list.querySelectorAll('a.report-item'));
         items.sort((a, b) => parseFloat(b.dataset.lastActivity || 0) - parseFloat(a.dataset.lastActivity || 0));
-        items.forEach(item => list.appendChild(item)); // re-insert in sorted order
+        items.forEach(item => list.appendChild(item));
     }
 
     // ─── NAV BADGE ────────────────────────────────────────────────────────────
