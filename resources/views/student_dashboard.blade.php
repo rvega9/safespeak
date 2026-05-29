@@ -7,6 +7,7 @@
     <link rel="icon" type="image/png" href="{{ asset('assets/logo2.png') }}">
     <link rel="stylesheet" href="{{ asset('css/student_style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 </head>
 <body class="student-body">
 
@@ -22,9 +23,11 @@
             <a href="{{ route('student.reports') }}" class="nav-link {{ request()->routeIs('student.reports') ? 'active' : '' }}">My Reports</a>
             <a href="{{ route('student.messages') }}" class="nav-link {{ request()->routeIs('student.messages') ? 'active' : '' }}">
                 Messages
-                @if(!empty($globalUnreadCount) && $globalUnreadCount > 0)
-                    <span class="nav-badge">{{ $globalUnreadCount }}</span>
-                @endif
+                {{-- Badge: rendered server-side on load, then kept live by JS polling --}}
+                <span class="nav-badge" id="navUnreadBadge"
+                      style="{{ (!empty($globalUnreadCount) && $globalUnreadCount > 0) ? '' : 'display:none;' }}">
+                    {{ $globalUnreadCount ?? 0 }}
+                </span>
             </a>
         </div>
         <div class="nav-user">
@@ -66,5 +69,34 @@
 
     @include('partials.student_settings')
 
+    <script>
+    // ── Real-time nav badge: poll sidebar every 3s and update the badge count ──
+    const SIDEBAR_URL = "{{ route('messages.sidebar-poll') }}";
+    const CSRF        = document.querySelector('meta[name="csrf-token"]').content;
+
+    async function pollUnreadBadge() {
+        try {
+            const res  = await fetch(SIDEBAR_URL, {
+                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF },
+            });
+            const data = await res.json();
+            const badge = document.getElementById('navUnreadBadge');
+            if (!badge) return;
+
+            const total = data.total_unread ?? 0;
+            if (total > 0) {
+                badge.textContent   = total;
+                badge.style.display = '';
+            } else {
+                badge.style.display = 'none';
+            }
+        } catch (err) { /* silently ignore network blips */ }
+    }
+
+    // Poll immediately on load, then every 3 seconds
+    pollUnreadBadge();
+    const badgeTimer = setInterval(pollUnreadBadge, 3000);
+    window.addEventListener('beforeunload', () => clearInterval(badgeTimer));
+    </script>
 </body>
 </html>

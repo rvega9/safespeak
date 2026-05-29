@@ -7,6 +7,7 @@
     <link rel="icon" type="image/png" href="{{ asset('assets/logo2.png') }}">
     <link rel="stylesheet" href="{{ asset('css/student_style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 </head>
 <body class="student-body">
 
@@ -22,9 +23,11 @@
             <a href="{{ route('student.reports') }}" class="nav-link {{ request()->routeIs('student.reports*') ? 'active' : '' }}">My Reports</a>
             <a href="{{ route('student.messages') }}" class="nav-link {{ request()->routeIs('student.messages') ? 'active' : '' }}">
                 Messages
-                @if(!empty($globalUnreadCount) && $globalUnreadCount > 0)
-                    <span class="nav-badge">{{ $globalUnreadCount }}</span>
-                @endif
+                {{-- Badge: rendered server-side on load, then kept live by JS polling --}}
+                <span class="nav-badge" id="navUnreadBadge"
+                      style="{{ (!empty($globalUnreadCount) && $globalUnreadCount > 0) ? '' : 'display:none;' }}">
+                    {{ $globalUnreadCount ?? 0 }}
+                </span>
             </a>
         </div>
         <div class="nav-user">
@@ -162,58 +165,87 @@
     @include('partials.student_settings')
 
     <script>
-        let currentReportId = null;
+    // ── Real-time nav badge: poll sidebar every 3s and update the badge count ──
+    const SIDEBAR_URL = "{{ route('messages.sidebar-poll') }}";
+    const CSRF        = document.querySelector('meta[name="csrf-token"]').content;
 
-        document.addEventListener('DOMContentLoaded', function () {
-            document.querySelectorAll('.report-link').forEach(function (link) {
-                link.addEventListener('click', function () {
-                    openReportModal(
-                        this.dataset.reportId,
-                        this.dataset.caseId,
-                        this.dataset.incidentDate,
-                        this.dataset.submittedDate,
-                        this.dataset.description,
-                        this.dataset.status
-                    );
-                });
+    async function pollUnreadBadge() {
+        try {
+            const res  = await fetch(SIDEBAR_URL, {
+                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF },
+            });
+            const data = await res.json();
+            const badge = document.getElementById('navUnreadBadge');
+            if (!badge) return;
+
+            const total = data.total_unread ?? 0;
+            if (total > 0) {
+                badge.textContent   = total;
+                badge.style.display = '';
+            } else {
+                badge.style.display = 'none';
+            }
+        } catch (err) { /* silently ignore network blips */ }
+    }
+
+    // Poll immediately on load, then every 3 seconds
+    pollUnreadBadge();
+    const badgeTimer = setInterval(pollUnreadBadge, 3000);
+    window.addEventListener('beforeunload', () => clearInterval(badgeTimer));
+
+    // ── Existing modal JS (unchanged) ────────────────────────────────────────
+    let currentReportId = null;
+
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('.report-link').forEach(function (link) {
+            link.addEventListener('click', function () {
+                openReportModal(
+                    this.dataset.reportId,
+                    this.dataset.caseId,
+                    this.dataset.incidentDate,
+                    this.dataset.submittedDate,
+                    this.dataset.description,
+                    this.dataset.status
+                );
             });
         });
+    });
 
-        function openReportModal(reportId, caseId, incidentDate, submittedDate, description, status) {
-            currentReportId = reportId;
-            document.getElementById('modalCaseId').innerText      = caseId;
-            document.getElementById('modalDate').innerText        = incidentDate;
-            document.getElementById('modalSubmitted').innerText   = submittedDate;
-            document.getElementById('modalDescription').innerText = description;
+    function openReportModal(reportId, caseId, incidentDate, submittedDate, description, status) {
+        currentReportId = reportId;
+        document.getElementById('modalCaseId').innerText      = caseId;
+        document.getElementById('modalDate').innerText        = incidentDate;
+        document.getElementById('modalSubmitted').innerText   = submittedDate;
+        document.getElementById('modalDescription').innerText = description;
 
-            const statusEl = document.getElementById('modalStatus');
-            statusEl.innerText = status === 'in_progress' ? 'In Progress' : status.charAt(0).toUpperCase() + status.slice(1);
-            statusEl.className = 'status-pill status-' + status;
+        const statusEl = document.getElementById('modalStatus');
+        statusEl.innerText = status === 'in_progress' ? 'In Progress' : status.charAt(0).toUpperCase() + status.slice(1);
+        statusEl.className = 'status-pill status-' + status;
 
-            const withdrawSection = document.getElementById('withdrawSection');
-            if (status === 'pending') {
-                document.getElementById('withdrawForm').action = '/my-reports/' + reportId + '/withdraw';
-                withdrawSection.style.display = 'block';
-            } else {
-                withdrawSection.style.display = 'none';
-            }
-
-            document.getElementById('reportModal').style.display = 'block';
-            document.body.style.overflow = 'hidden';
+        const withdrawSection = document.getElementById('withdrawSection');
+        if (status === 'pending') {
+            document.getElementById('withdrawForm').action = '/my-reports/' + reportId + '/withdraw';
+            withdrawSection.style.display = 'block';
+        } else {
+            withdrawSection.style.display = 'none';
         }
 
-        function closeReportModal() {
-            document.getElementById('reportModal').style.display = 'none';
-            document.body.style.overflow = 'auto';
-        }
+        document.getElementById('reportModal').style.display = 'block';
+        document.body.style.overflow = 'hidden';
+    }
 
-        function confirmWithdraw() { document.getElementById('withdrawConfirm').style.display = 'flex'; }
-        function cancelWithdraw()  { document.getElementById('withdrawConfirm').style.display = 'none'; }
-        function submitWithdraw()  { document.getElementById('withdrawForm').submit(); }
+    function closeReportModal() {
+        document.getElementById('reportModal').style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
 
-        window.onkeydown = function(e) {
-            if (e.key === "Escape") { cancelWithdraw(); closeReportModal(); }
-        };
+    function confirmWithdraw() { document.getElementById('withdrawConfirm').style.display = 'flex'; }
+    function cancelWithdraw()  { document.getElementById('withdrawConfirm').style.display = 'none'; }
+    function submitWithdraw()  { document.getElementById('withdrawForm').submit(); }
+
+    window.onkeydown = function(e) {
+        if (e.key === "Escape") { cancelWithdraw(); closeReportModal(); }
+    };
     </script>
 </body>
 </html>
