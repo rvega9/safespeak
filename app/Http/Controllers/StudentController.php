@@ -212,40 +212,56 @@ class StudentController extends Controller
     {
         $user = auth()->user();
 
-        // Fetch the reports this user can see
+        // Fetch reports this user can see.
+        // We load messages ordered DESC so ->first() on the collection = the true latest message.
+        // We do NOT rely on the Report::messages() relationship default order (which is ASC)
+        // because Eloquent eager-load respects the closure's orderBy, not the relationship's.
         if ($user->role === 'student') {
             $reports = Report::where('user_id', $user->id)
                 ->with(['messages' => function ($q) {
-                    $q->orderBy('created_at', 'desc');
+                    $q->orderBy('created_at', 'desc')->orderBy('message_id', 'desc');
                 }])
                 ->get();
         } else {
-            // Guidance/admin can see all non-archived reports
             $reports = Report::where('is_archived', false)
                 ->with(['messages' => function ($q) {
-                    $q->orderBy('created_at', 'desc');
+                    $q->orderBy('created_at', 'desc')->orderBy('message_id', 'desc');
                 }])
                 ->get();
         }
 
         $conversations = $reports->map(function ($report) use ($user) {
-            $latest  = $report->messages->first(); // already desc sorted
-            $unread  = $report->messages
+            // ->first() is the latest because we loaded DESC
+            $latest = $report->messages->first();
+
+            // Count messages sent by the OTHER party that are unread
+            $unread = $report->messages
                 ->where('is_read', false)
                 ->where('user_id', '!=', $user->id)
                 ->count();
 
+            // Label shown before the preview text, e.g. "You: " or "Student: " or "Guidance: "
+            $senderLabel = null;
+            if ($latest) {
+                if ($latest->user_id === $user->id) {
+                    $senderLabel = 'You';
+                } elseif ($user->role === 'guidance') {
+                    $senderLabel = 'Student';
+                } else {
+                    $senderLabel = 'Guidance';
+                }
+            }
+
             return [
-                'report_id'      => $report->report_id,
-                'unread'         => $unread,
-                'latest_text'    => $latest ? $report->messages->first()->message_text : null,
-                'latest_sender'  => $latest ? ($latest->user_id === $user->id ? 'You' : ($user->role === 'guidance' ? 'Student' : 'Guidance')) : null,
-                'latest_time'    => $latest ? $latest->created_at->diffForHumans() : null,
-                'last_activity'  => $latest ? $latest->created_at->timestamp : $report->created_at->timestamp,
+                'report_id'     => $report->report_id,
+                'unread'        => $unread,
+                'latest_text'   => $latest ? $latest->message_text : null,
+                'latest_sender' => $senderLabel,
+                'latest_time'   => $latest ? $latest->created_at->diffForHumans() : null,
+                'last_activity' => $latest ? $latest->created_at->timestamp : $report->created_at->timestamp,
             ];
         });
 
-        // Total unread for nav badge
         $totalUnread = $conversations->sum('unread');
 
         return response()->json([

@@ -129,7 +129,8 @@
                             </span>
                         </div>
                         <div class="report-item-content">
-                            <p class="summary-preview" id="conv-preview-{{ $report->report_id }}">
+                            <p class="summary-preview" id="conv-preview-{{ $report->report_id }}"
+                               style="{{ $unreadCount > 0 ? 'font-weight:700;' : '' }}">
                                 <span style="color:#94a3b8; font-size:0.8rem;">{{ $previewLabel }}</span>{{ $preview }}
                             </p>
                             @if($section === 'archived')
@@ -543,11 +544,12 @@
 
         if (lastActivity) item.dataset.lastActivity = lastActivity;
 
-        const isActive = (parseInt(reportId) === REPORT_ID);
+        const isActive  = (parseInt(reportId) === REPORT_ID);
+        const hasUnread = (!isActive && unreadCount > 0);
 
-        // Unread badge — suppress for the currently open conversation
+        // Numbered unread badge
         if (badgeEl) {
-            if (!isActive && unreadCount > 0) {
+            if (hasUnread) {
                 badgeEl.textContent = unreadCount;
                 badgeEl.style.display = '';
             } else {
@@ -555,11 +557,12 @@
             }
         }
 
-        // Bold title when unread
-        if (titleEl) titleEl.style.fontWeight = (!isActive && unreadCount > 0) ? '700' : '';
+        // Bold BOTH case ID title and preview text when there are unread messages
+        if (titleEl) titleEl.style.fontWeight = hasUnread ? '700' : '';
+        if (previewEl) previewEl.style.fontWeight = hasUnread ? '700' : '';
 
-        // Preview text
-        if (previewEl && previewText) {
+        // Preview text — always update when we have new text
+        if (previewEl && previewText !== null && previewText !== undefined) {
             const limit   = 25;
             const trimmed = previewText.length > limit ? previewText.substring(0, limit) + '…' : previewText;
             previewEl.textContent = trimmed;

@@ -63,15 +63,19 @@
                             <strong id="conv-title-{{ $report->report_id }}"
                                     style="{{ $unread > 0 ? 'font-weight:700;' : '' }}">
                                 {{ $report->case_id }}
-                                <span class="unread-dot" id="dot-{{ $report->report_id }}"
-                                      style="{{ $unread > 0 ? '' : 'display:none;' }}"></span>
+                                {{-- Numbered unread badge (same style as guidance) --}}
+                                <span class="unread-badge" id="dot-{{ $report->report_id }}"
+                                      style="{{ $unread > 0 ? '' : 'display:none;' }}">
+                                    {{ $unread ?: '' }}
+                                </span>
                             </strong>
                             <span id="conv-time-{{ $report->report_id }}"
                                   style="font-size:0.75rem; color:#94a3b8;">
                                 {{ $latestMsg ? $latestMsg->created_at->diffForHumans() : $report->created_at->format('M d') }}
                             </span>
                         </div>
-                        <p class="summary-preview" id="conv-preview-{{ $report->report_id }}">
+                        <p class="summary-preview" id="conv-preview-{{ $report->report_id }}"
+                           style="{{ $unread > 0 ? 'font-weight:700;' : '' }}">
                             <span style="color:#94a3b8; font-size:0.8rem;">{{ $previewLabel }}</span>{{ $preview }}
                         </p>
                     </a>
@@ -265,31 +269,37 @@
     }
 
     // ─── UPDATE ONE SIDEBAR ITEM ──────────────────────────────────────────────
+    // previewText: full string already including "You: " / "Guidance: " prefix
+    // unreadCount: number of unread messages from the other party
+    // lastActivity: unix timestamp (for sorting)
     function updateSidebarItem(reportId, previewText, timeText, unreadCount, lastActivity) {
-        const item     = document.getElementById('conv-' + reportId);
-        const dotEl    = document.getElementById('dot-' + reportId);
-        const titleEl  = document.getElementById('conv-title-' + reportId);
+        const item      = document.getElementById('conv-' + reportId);
+        const dotEl     = document.getElementById('dot-' + reportId);
+        const titleEl   = document.getElementById('conv-title-' + reportId);
         const previewEl = document.getElementById('conv-preview-' + reportId);
-        const timeEl   = document.getElementById('conv-time-' + reportId);
+        const timeEl    = document.getElementById('conv-time-' + reportId);
 
         if (!item) return;
 
-        // Update last-activity timestamp for sorting
         if (lastActivity) item.dataset.lastActivity = lastActivity;
 
-        // Unread dot + bold title
-        const isActive = (parseInt(reportId) === REPORT_ID); // currently open — no dot needed
-        if (dotEl) dotEl.style.display = (!isActive && unreadCount > 0) ? '' : 'none';
-        if (titleEl) titleEl.style.fontWeight = (!isActive && unreadCount > 0) ? '700' : '';
+        const isActive = (parseInt(reportId) === REPORT_ID);
+        const hasUnread = (!isActive && unreadCount > 0);
 
-        // Preview text
-        if (previewEl && previewText) {
-            const limit = 38;
+        // Unread dot (student view uses dot, not numbered badge)
+        if (dotEl) dotEl.style.display = hasUnread ? '' : 'none';
+
+        // Bold BOTH the case ID title and the preview text when there are unread messages
+        if (titleEl) titleEl.style.fontWeight = hasUnread ? '700' : '';
+        if (previewEl) previewEl.style.fontWeight = hasUnread ? '700' : '';
+
+        // Preview text — always update when we have new text
+        if (previewEl && previewText !== null && previewText !== undefined) {
+            const limit   = 38;
             const trimmed = previewText.length > limit ? previewText.substring(0, limit) + '…' : previewText;
             previewEl.textContent = trimmed;
         }
 
-        // Time label
         if (timeEl && timeText) timeEl.textContent = timeText;
     }
 
